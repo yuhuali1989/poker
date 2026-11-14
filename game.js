@@ -16,7 +16,7 @@ const G = {
   heroName: '大侠',
   hint: false,
   panel: true,          // 牌桌局势面板开关
-  intel: true,          // 玩家情报卡开关
+  intel: (typeof window === 'undefined' || window.innerWidth > 720), // 手机默认收起情报卡
   running: false,
   roundActions: [],     // 当前下注轮的动作流
   handActions: [],      // 整手牌的动作流

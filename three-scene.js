@@ -849,8 +849,12 @@ function tick() {
 /* ---------------- 对外 API ---------------- */
 function resize() {
   if (!renderer || !wrap) return;
-  const w = wrap.clientWidth || 900, h = wrap.clientHeight || 600;
-  renderer.setSize(w, h, false);
+  // 用 canvas 的实际显示尺寸，而不是 wrap：手机端 canvas 只占舞台的一块，
+  // 若继续用 wrap 尺寸会得到极窄的 aspect，3D 画面被压成左上角一小块。
+  const cr = canvas ? canvas.getBoundingClientRect() : null;
+  const w = (cr && cr.width > 0) ? cr.width : (wrap.clientWidth || 900);
+  const h = (cr && cr.height > 0) ? cr.height : (wrap.clientHeight || 600);
+  renderer.setSize(Math.round(w), Math.round(h), false);
   camera.aspect = w / h; camera.updateProjectionMatrix();
 }
 function setOn(flag) {
@@ -914,8 +918,10 @@ function init() {
   buildRoom(); buildTable(); buildSeats(); buildCards(); buildChips(); buildLights();
   buildDealer(); buildPlayers();
 
-  let wantOn = true;
+  let wantOn = !(typeof window !== 'undefined' && window.innerWidth <= 720);
   try { const v = localStorage.getItem('poker_3d'); if (v !== null) wantOn = v === '1'; } catch (e) {}
+  try { const q = new URLSearchParams(location.search).get('3d');
+    if (q === '1') wantOn = true; else if (q === '0') wantOn = false; } catch (e) {}
   setOn(wantOn);
   try { if (new URLSearchParams(location.search).get('face') === '1') focusDealer(true); } catch (e) {}
 

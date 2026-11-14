@@ -650,3 +650,261 @@ body.t3d #btn-3d-face { font-size: 10px; padding: 4px 7px; width: 100%; }
 #my-hand.mh-folded #mh-cards .card { filter: grayscale(.9); opacity: .42; }
 #mh-read { font-size: 12px; color: #c9d6e8; line-height: 1.8; }
 #mh-read b { color: var(--gold); font-size: 16px; margin: 0 2px; }
+
+
+/* ============================================================
+   手机端响应式布局（≤720px）—— 重排为「对手网格 / 公共牌 / 建议 / 手牌 / 操作」
+   ============================================================ */
+@media (max-width: 720px) {
+  :root { --card-w: 38px; --card-h: 54px; }
+  * { -webkit-tap-highlight-color: transparent; }
+  button, input, select { touch-action: manipulation; }
+  html, body { height: 100%; overflow: hidden; }
+  #app { height: 100vh; height: 100dvh; }
+
+  /* ---- 顶栏：两行，功能按钮横向滑动 ---- */
+  #topbar { flex-wrap: wrap; gap: 5px; padding: 5px 8px; align-items: center; }
+  .brand { font-size: 14px; white-space: nowrap; }
+  .brand .sub { display: none; }
+  .top-info { margin-left: auto; display: flex; gap: 8px; }
+  .top-info span { font-size: 10px; margin: 0; white-space: nowrap; }
+  .top-btns {
+    width: 100%; display: flex; flex-wrap: nowrap; gap: 5px;
+    overflow-x: auto; overflow-y: hidden; padding-bottom: 2px;
+    scrollbar-width: none; -webkit-overflow-scrolling: touch;
+  }
+  .top-btns::-webkit-scrollbar { display: none; }
+  .top-btns .ghost-btn { margin: 0; flex: 0 0 auto; font-size: 11px; padding: 7px 9px; min-height: 34px; }
+
+  /* ---- 主区：纵向滚动，隐藏右侧日志 ---- */
+  #main { display: block; min-height: 0; flex: 1; }
+  #log-panel { display: none !important; }
+  #table-wrap {
+    display: flex; flex-direction: column; gap: 6px;
+    height: 100%; padding: 6px 8px 8px; overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* ---- 2D 桌：8 家小卡网格 + 公共牌 + 精简建议 ---- */
+  #table {
+    position: relative; left: auto; top: auto; transform: none;
+    width: 100%; height: auto; flex: none; margin: 0;
+    background: radial-gradient(ellipse at 50% 42%, #175434, #0b3220 80%);
+    border: 6px solid #54371d; border-radius: 18px;
+    box-shadow: 0 6px 22px rgba(0,0,0,.55), inset 0 0 40px rgba(0,0,0,.35);
+    display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 5px; padding: 9px 6px 11px;
+  }
+  #table::before { inset: 3px; border-radius: 13px; }
+  #table-logo { display: none; }
+
+  .seat { position: static; transform: none; width: auto; min-width: 0; order: 1; text-align: center; }
+  .seat .plate {
+    display: block; min-width: 0; width: 100%; padding: 3px 2px 4px;
+    border-radius: 7px; transform: none !important;
+  }
+  .seat .plate .pname { font-size: 9.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .seat .plate .pchips { font-size: 10px; }
+  .seat .plate .ptag, .seat .plate .p-actions, .seat .plate .p-read,
+  .seat .hole-cards { display: none; }
+  .seat-face { width: 15px; height: 15px; margin-right: 2px; }
+  .status-badge { font-size: 8px; padding: 0 3px; margin-left: 1px; }
+  .plate .dealer-btn-chip { width: 14px; height: 14px; line-height: 14px; font-size: 8px; top: -6px; right: -5px; }
+  .plate .open-badge { font-size: 7px; padding: 0 3px; top: -7px; left: -4px; }
+  .plate .bet-chip { font-size: 8px; padding: 0 5px; bottom: -13px; }
+
+  #community {
+    position: static; transform: none; order: 2; grid-column: 1 / -1;
+    text-align: center; padding: 2px 0 0;
+  }
+  #pot-display { font-size: 13px; margin-bottom: 5px; }
+  #board { gap: 5px; min-height: var(--card-h); }
+  #board .card { width: var(--card-w); height: var(--card-h); border-radius: 5px; }
+  #board .card .rank { font-size: 15px; }
+  #board .card .suit { font-size: 13px; }
+  #stage-label { margin-top: 4px; font-size: 10px; }
+
+  #round-panel {
+    position: static; transform: none; order: 3; grid-column: 1 / -1;
+    width: 100%; max-height: none; padding: 5px 7px; font-size: 10px;
+    background: rgba(6,12,22,.9); border-radius: 8px;
+  }
+  #rp-head { font-size: 10px; gap: 6px; }
+  #rp-streets span { font-size: 9px; padding: 1px 3px; }
+  #rp-body { display: block; }
+  #rp-actions-box { display: none; }
+  #rp-advice-box { width: 100%; border: 0; padding: 0; }
+  #rp-numbers { font-size: 10.5px; white-space: normal; }
+  #rp-advice { font-size: 11px; white-space: normal; }
+  #rp-bet { white-space: normal; }
+
+  /* ---- 荷官：一条迷你互动栏 ---- */
+  #dealer-corner {
+    position: static; transform: none; width: 100%; order: 2;
+    flex-direction: row; gap: 6px; align-items: center;
+    background: rgba(8,14,24,.86); border: 1px solid rgba(245,196,81,.28);
+    border-radius: 10px; padding: 4px 6px;
+  }
+  #dealer-card { width: 48px; height: 62px; border-radius: 8px; }
+  #dealer-name, #dealer-looks, #dealer-video-list, #dealer-video-hint,
+  #dealer-tap, #dealer-progress, #dealer-playpause, #dealer-mute,
+  #t3d-cam-bar, #dealer-hearts { display: none; }
+  #dealer-console { flex: 1; min-width: 0; gap: 3px; }
+  #dealer-speech { width: 100%; font-size: 10px; padding: 3px 8px; min-height: 0; }
+  #dealer-speech::after { display: none; }
+  #dealer-actions, #tip-bar { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+  #dealer-actions::-webkit-scrollbar, #tip-bar::-webkit-scrollbar { display: none; }
+  #dealer-actions .act-btn { flex: 0 0 auto; font-size: 10px; padding: 4px 7px; min-height: 28px; }
+  #tip-bar { font-size: 9px; }
+  #tip-bar .tip-btn { flex: 0 0 auto; }
+
+  /* ---- 情报卡：默认关，打开后成为下方信息块 ---- */
+  #intel-panel {
+    position: static; width: 100%; order: 3; z-index: 3;
+    max-height: 164px; overflow-y: auto; font-size: 10px;
+  }
+  #intel-list { max-height: 100px; }
+  #intel-foot { display: none; }
+
+  /* ---- 操作栏：吸底，按钮触控友好 ---- */
+  #action-bar {
+    padding: 6px 8px calc(6px + env(safe-area-inset-bottom));
+    gap: 5px; position: sticky; bottom: 0; z-index: 20;
+    box-shadow: 0 -6px 20px rgba(0,0,0,.5);
+  }
+  #my-hand { min-height: 0; padding: 5px 8px; gap: 8px; border-radius: 9px; flex-wrap: nowrap; }
+  .mh-label { min-width: 0; font-size: 11px; }
+  .mh-label #mh-tag { font-size: 9px; white-space: normal; }
+  #mh-cards { gap: 5px; flex-shrink: 0; }
+  #mh-cards .card { width: 46px; height: 64px; border-radius: 7px; }
+  #mh-cards .card .rank { font-size: 20px; }
+  #mh-cards .card .suit { font-size: 17px; }
+  #mh-read { font-size: 10px; line-height: 1.5; flex: 1; min-width: 0; }
+  #mh-read b { font-size: 12px; }
+  #hero-info { font-size: 10px; min-height: 0; }
+  #hint-tip { margin-left: 6px; }
+  #actions { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 5px; }
+  #actions > .act { width: 100%; padding: 10px 2px; font-size: 13px; border-radius: 7px; }
+  #raise-box {
+    grid-column: 1 / -1; display: flex; gap: 6px; padding: 4px 6px;
+    border-radius: 8px; align-items: center;
+  }
+  #raise-box .act { padding: 9px 10px; font-size: 12px; white-space: nowrap; }
+  #raise-slider { flex: 1; width: auto; min-width: 56px; }
+  #raise-val { font-size: 11px; min-width: 40px; text-align: right; }
+  .raise-presets { gap: 3px; }
+  .preset { font-size: 10px; padding: 5px 6px; }
+
+  /* ---- 弹窗 ---- */
+  .modal-card { padding: 18px 14px; width: 96%; max-height: 88vh; border-radius: 12px; }
+  .modal-card h2 { font-size: 19px; }
+  .modal-card p { font-size: 12px; line-height: 1.65; }
+  .modal-card label { font-size: 13px; }
+  .modal-card input { font-size: 14px; padding: 7px 9px; width: 58%; }
+  .primary { padding: 11px 22px; font-size: 14px; }
+  #prof-body { flex-direction: column; min-height: 0; gap: 8px; }
+  #prof-list { width: 100%; max-height: 62px; display: flex; overflow-x: auto; gap: 5px; padding: 0; }
+  .prof-row { flex: 0 0 auto; margin: 0; font-size: 11px; }
+  #prof-detail { max-height: 46vh; }
+  .prof-grid { grid-template-columns: repeat(4, 1fr); }
+  .rank-table { font-size: 11px; }
+  #shout-toast { max-width: 88vw; font-size: 13px; text-align: center; }
+
+  /* ---- 手动开启 3D 时：固定舞台高度 + 环绕小座位 ---- */
+  body.t3d #table-wrap { overflow: hidden; }
+  body.t3d #table {
+    display: block; position: relative; left: auto; top: auto; transform: none;
+    width: 100%; height: 300px; flex: none; padding: 0; margin: 0;
+    background: transparent; border: 0; border-radius: 0; box-shadow: none;
+  }
+  body.t3d #table::before { display: none; }
+  body.t3d #table3d { top: 6px; left: 8px; right: 8px; bottom: auto; width: auto; height: 300px; }
+  body.t3d .seat { position: absolute; transform: translate(-50%, -50%); width: 66px; }
+  body.t3d #seat-0 { left: 50%; top: 92%; bottom: auto; }
+  body.t3d #seat-1 { left: 76%; top: 78%; }
+  body.t3d #seat-2 { left: 88%; top: 52%; }
+  body.t3d #seat-3 { left: 84%; top: 24%; }
+  body.t3d #seat-4 { left: 66%; top: 10%; }
+  body.t3d #seat-5 { left: 34%; top: 10%; }
+  body.t3d #seat-6 { left: 16%; top: 24%; }
+  body.t3d #seat-7 { left: 12%; top: 52%; }
+  body.t3d #community { position: absolute; top: 1%; left: 50%; transform: translateX(-50%); padding: 0; }
+  body.t3d #pot-display { font-size: 12px; padding: 2px 10px; }
+  body.t3d #round-panel { display: none; }
+  body.t3d #dealer-corner {
+    position: static; transform: none; width: 100%; flex-direction: row; gap: 6px;
+  }
+  body.t3d #dealer-card { display: block; width: 48px; height: 62px; }
+  body.t3d #dealer-console { width: auto; flex: 1; }
+  body.t3d #dealer-speech { width: 100%; }
+  body.t3d #dealer-actions .act-btn { font-size: 10px; padding: 4px 7px; }
+}
+
+/* 矮屏横屏：进一步压缩 */
+@media (max-width: 900px) and (max-height: 480px) and (orientation: landscape) {
+  #topbar { padding: 3px 8px; }
+  .top-info span { font-size: 9px; }
+  #table-wrap { padding: 4px 8px; gap: 4px; }
+  #dealer-corner { display: none; }
+  #my-hand { padding: 3px 8px; }
+  #mh-cards .card { width: 38px; height: 52px; }
+}
+
+
+/* ---- 手机端二次修正：防溢出 / 牌桌填满 / 文字换行 ---- */
+@media (max-width: 720px) {
+  #table-wrap, #table, #action-bar, #actions, #raise-box, #my-hand,
+  #dealer-corner, #dealer-console, #intel-panel, #round-panel,
+  #community, #rp-head, #rp-stats { min-width: 0; max-width: 100%; }
+  #table {
+    flex: 1 1 auto; min-height: 300px;
+    align-content: center; row-gap: 12px;
+  }
+  #table .seat { min-width: 0; }
+  #table .plate { max-width: 100%; }
+  #rp-head { flex-wrap: wrap; white-space: normal; gap: 3px 8px; }
+  #rp-streets { display: none; }
+  #rp-stats { white-space: normal; }
+  #action-bar, #my-hand, #raise-box { overflow-x: hidden; }
+  #mh-read { white-space: normal !important; overflow-wrap: anywhere; }
+  .raise-presets { min-width: 0; overflow-x: auto; scrollbar-width: none; }
+  .raise-presets::-webkit-scrollbar { display: none; }
+  #raise-slider { min-width: 40px; }
+  #board .card { animation: none; }
+  #dealer-card { background: #1a1020; }
+  #dealer-photo { object-position: 50% 8%; }
+  #dealer-speech { white-space: normal; }
+}
+
+
+/* ---- 手机端最终精修 ---- */
+@media (max-width: 720px) {
+  .brand-emoji { display: none; }
+  .brand { font-size: 12.5px; }
+  #hand-no { display: none; }
+  .top-info { gap: 6px; }
+  .top-info span { font-size: 9.5px; }
+
+  /* 喊话条抬到牌桌顶部空白，避免压住座位卡片 */
+  #shout-toast { top: 3%; font-size: 12px; padding: 5px 12px; white-space: nowrap; }
+  #shout-toast.allin-shout { font-size: 16px; letter-spacing: 1px; padding: 6px 14px; }
+
+  /* OPEN / 庄位徽章缩小，避免飘到相邻行 */
+  .plate .open-badge { font-size: 6.5px; padding: 0 2px; top: -6px; left: -2px; border-radius: 3px; }
+  .plate .dealer-btn-chip { width: 12px; height: 12px; line-height: 12px; font-size: 7px; top: -5px; right: -3px; }
+
+  /* 荷官迷你卡：显示脸，不显示 LIVE 红条 */
+  #dealer-live { display: none; }
+  #dealer-card { background: #140d18; }
+  #dealer-photo {
+    animation: none !important; transform: none !important;
+    object-position: 50% 2% !important;
+  }
+  #dealer-card.talking #dealer-photo { filter: brightness(1.12); }
+  #dealer-voice-wave { bottom: 2px; }
+}
+
+@media (max-width: 720px) {
+  body.t3d #table { min-height: 0; height: 300px; }
+  body.t3d #table3d { height: 300px; }
+}
