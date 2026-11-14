@@ -7,7 +7,9 @@
 ## 在线玩
 
 - **GitHub Pages**：<https://yuhuali1989.github.io/poker/>
-- 首次 push 到 `main` 后，`.github/workflows/pages.yml` 会自动启用 Pages 并部署，无需手动设置。
+- 仓库自带 `.github/workflows/pages.yml`：每次 push `main` 会自动把站点同步到 `gh-pages` 分支。
+  首次只需在仓库 **Settings → Pages** 把 Source 设为 `Deploy from a branch` → `gh-pages` / `(root)` 并保存，
+  之后所有更新自动发布。（GitHub 不允许 Actions 的 `GITHUB_TOKEN` 代开 Pages，所以这一步只能人工点一次。）
 
 ## 本地运行
 
