@@ -1,4 +1,4 @@
-name: Deploy to GitHub Pages
+name: Publish static site
 
 on:
   push:
@@ -6,35 +6,25 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
-  pages: write
-  id-token: write
-
-concurrency:
-  group: pages
-  cancel-in-progress: true
+  contents: write
 
 jobs:
-  deploy:
+  publish:
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # 首次部署时自动启用 Pages 并把发布源设为 GitHub Actions，无需手动设置
-      - name: Enable Pages
-        uses: actions/configure-pages@v5
+      # 同步到 gh-pages 分支：只需要 contents:write，无需管理员权限。
+      # GitHub Pages 选择「Deploy from a branch → gh-pages / (root)」即可自动发布，
+      # 之后每次 push main 都会自动更新站点。
+      - name: Publish to gh-pages
+        uses: peaceiris/actions-gh-pages@v4
         with:
-          enablement: true
-
-      - name: Upload static site
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: .
-
-      - name: Deploy
-        id: deployment
-        uses: actions/deploy-pages@v4
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_branch: gh-pages
+          publish_dir: .
+          keep_files: false
+          user_name: github-actions[bot]
+          user_email: 41898282+github-actions[bot]@users.noreply.github.com
+          commit_message: "Deploy static site from main"
