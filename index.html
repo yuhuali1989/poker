@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>德州扑克练习桌</title>
+<link rel="stylesheet" href="style.css">
+<script type="importmap">{"imports":{"three":"./vendor/three.module.js"}}</script>
+</head>
+<body>
+<div id="app">
+  <!-- 顶栏 -->
+  <header id="topbar">
+    <div class="brand">🃏 德州扑克练习桌 <span class="sub">CRYPTO 真随机 · 8人桌</span></div>
+    <div class="top-info">
+      <span id="blind-info">盲注 10/20</span>
+      <span id="hand-no">第 0 手</span>
+      <span id="stat-info">战绩 0手 0胜</span>
+    </div>
+    <div class="top-btns">
+      <button id="btn-tutorial" class="ghost-btn">📖 教学</button>
+      <button id="btn-panel" class="ghost-btn">📊 局势:开</button>
+      <button id="btn-intel" class="ghost-btn">🔍 情报:开</button>
+      <button id="btn-hint" class="ghost-btn">💡 提示:关</button>
+      <button id="btn-music" class="ghost-btn">🎵 音乐:开</button>
+      <button id="btn-sfx" class="ghost-btn">🔊 声音:开</button>
+      <button id="btn-3d" class="ghost-btn">🎲 3D 桌:开</button>
+      <button id="btn-profiles" class="ghost-btn">🧠 档案</button>
+      <button id="btn-rank" class="ghost-btn">🏆 排行榜</button>
+    </div>
+  </header>
+
+  <div id="main">
+    <!-- 牌桌区 -->
+    <div id="table-wrap">
+      <div id="table">
+        <div id="table-logo">GOLDEN CROC CLUB</div>
+        <div id="shout-toast"></div>
+        <!-- 公共牌 -->
+        <div id="community">
+          <div id="pot-display">底池 <b id="pot-num">0</b></div>
+          <div id="board"></div>
+          <div id="stage-label"></div>
+        </div>
+        <!-- 本轮局势 + 胜率建议面板 -->
+        <div id="round-panel">
+          <div id="rp-head">
+            <span id="rp-stage">📊 等待开局</span>
+            <span id="rp-stats"></span>
+            <div id="rp-streets"></div>
+          </div>
+          <div id="rp-body">
+            <div id="rp-actions-box">
+              <div class="rp-label">本轮动作</div>
+              <div id="rp-actions">尚未开始</div>
+            </div>
+            <div id="rp-advice-box">
+              <div class="rp-label">你的读数与建议 · MC300</div>
+              <div id="rp-numbers"></div>
+              <div id="rp-advice"></div>
+              <div id="rp-bet"></div>
+            </div>
+          </div>
+        </div>
+        <!-- 8 个座位 -->
+        <div class="seat" data-seat="0" id="seat-0"></div>
+        <div class="seat" data-seat="1" id="seat-1"></div>
+        <div class="seat" data-seat="2" id="seat-2"></div>
+        <div class="seat" data-seat="3" id="seat-3"></div>
+        <div class="seat" data-seat="4" id="seat-4"></div>
+        <div class="seat" data-seat="5" id="seat-5"></div>
+        <div class="seat" data-seat="6" id="seat-6"></div>
+        <div class="seat" data-seat="7" id="seat-7"></div>
+      </div>
+
+      <!-- 荷官：牌桌正对面 · 写实真人 · 可点击互动 · 动作库 -->
+      <div id="dealer-corner">
+        <div id="dealer-card" class="mode-photo" title="点我和荷官互动～">
+          <video id="dealer-video" autoplay loop muted playsinline preload="auto"></video>
+          <img id="dealer-photo" alt="荷官" />
+          <div id="dealer-visual"></div>
+          <div id="dealer-act-layer"><span id="dealer-act-emoji"></span><span id="dealer-act-cards"></span></div>
+          <div id="dealer-live"><span class="live-dot"></span> LIVE <span id="dealer-role">荷官</span></div>
+          <div id="dealer-voice-wave"><i></i><i></i><i></i><i></i><i></i></div>
+          <div id="dealer-hearts"></div>
+          <div id="dealer-progress"><i></i></div>
+          <div id="dealer-tap">👆 点我</div>
+          <button id="dealer-playpause" title="暂停 / 播放循环视频">⏸</button>
+          <button id="dealer-mute" title="视频声音开关">🔇</button>
+        </div>
+        <div id="dealer-console">
+          <div id="dealer-speech"><span id="dealer-text">欢迎来到金鳄会～</span></div>
+          <div id="dealer-name">✨ 薇薇 · 经典红裙 ✨<br><span>今晚由我陪你玩</span></div>
+          <div id="dealer-looks"></div>
+          <div id="dealer-actions"></div>
+          <div id="dealer-video-list"></div>
+          <div id="tip-bar">
+            <span>💐 打赏</span>
+            <button class="tip-btn" data-tip="10">10</button>
+            <button class="tip-btn" data-tip="50">50</button>
+            <button class="tip-btn" data-tip="100">100</button>
+          </div>
+          <div id="t3d-cam-bar"><button id="btn-3d-face" class="ghost-btn">🔍 荷官特写</button></div>
+          <div id="dealer-video-hint">把 mp4 放进 <b>public/videos/</b> 或用 <b>?video=直链</b></div>
+        </div>
+      </div>
+
+      <!-- 玩家情报：谁先开池 / 每人操作 / 推测牌况 -->
+      <div id="intel-panel">
+        <div id="intel-head">
+          <span>🔍 玩家情报</span>
+          <span id="intel-open"></span>
+        </div>
+        <div id="intel-list"></div>
+        <div id="intel-target"></div>
+        <div id="intel-foot">动作符号 ▫盲注 · ↑加注 · ●下注 · =跟注 · –过牌 · ×弃牌</div>
+      </div>
+    </div>
+
+    <!-- 日志区 -->
+    <aside id="log-panel">
+      <h3>对局记录</h3>
+      <div id="log"></div>
+    </aside>
+  </div>
+
+  <!-- 操作区 -->
+  <footer id="action-bar">
+    <!-- 我的手牌：放大单独展示，3D 模式下也始终可见 -->
+    <div id="my-hand">
+      <div class="mh-label">🃏 我的手牌<span id="mh-tag">等待发牌</span></div>
+      <div id="mh-cards"></div>
+      <div id="mh-read"></div>
+    </div>
+    <div id="hero-info">
+      <span id="hero-stage-tip"></span>
+      <span id="hint-tip"></span>
+    </div>
+    <div id="actions">
+      <button id="act-fold" class="act fold">弃牌</button>
+      <button id="act-check" class="act check">过牌</button>
+      <button id="act-call" class="act call">跟注</button>
+      <div id="raise-box">
+        <button id="act-raise" class="act raise">加注</button>
+        <input type="range" id="raise-slider" min="0" max="100" value="0">
+        <span id="raise-val"></span>
+        <div class="raise-presets">
+          <button class="preset" data-frac="0.5">½池</button>
+          <button class="preset" data-frac="1">满池</button>
+          <button class="preset" data-frac="2">2倍池</button>
+          <button class="preset" data-frac="allin">全下</button>
+        </div>
+      </div>
+    </div>
+  </footer>
+</div>
+
+<!-- 开始弹窗 -->
+<div id="modal-start" class="modal">
+  <div class="modal-card">
+    <h2>🃏 德州扑克练习桌</h2>
+    <p>8 人 3D 名人桌 · 与 Yara / Siaqiu / 布兰妮 / Tanxuan / Dwan 同桌</p>
+    <p class="fineprint">桌上名人牌手均为虚构 3D 致敬形象，非本人肖像</p>
+    <p class="fineprint">纯前端版 · 积分与牌手档案保存在本机浏览器（localStorage）</p>
+    <label>你的昵称：<input id="input-name" maxlength="12" value="大侠" /></label>
+    <button id="btn-start" class="primary">入座开局</button>
+    <button id="btn-start-tutorial" class="ghost-btn">先看新手教学</button>
+  </div>
+</div>
+
+<!-- 教学弹窗 -->
+<div id="modal-tutorial" class="modal hidden">
+  <div class="modal-card wide">
+    <div id="tutorial-body"></div>
+    <div class="tut-nav">
+      <button id="tut-prev" class="ghost-btn">上一步</button>
+      <span id="tut-page">1 / 6</span>
+      <button id="tut-next" class="primary">下一步</button>
+      <button id="tut-close" class="ghost-btn">关闭</button>
+    </div>
+  </div>
+</div>
+
+<!-- 排行榜弹窗 -->
+<div id="modal-rank" class="modal hidden">
+  <div class="modal-card">
+    <h2>🏆 积分排行榜（后端存档）</h2>
+    <table id="rank-table"><thead><tr><th>#</th><th>昵称</th><th>积分</th><th>手数</th><th>胜场</th></tr></thead><tbody></tbody></table>
+    <button id="rank-close" class="ghost-btn">关闭</button>
+  </div>
+</div>
+
+<!-- 牌手档案：最近 20 把行为 / 人格 / 压榨策略 -->
+<div id="modal-profiles" class="modal hidden">
+  <div class="modal-card wide">
+    <h2>🧠 牌手档案 · 最近 20 把行为分析</h2>
+    <div id="prof-target"></div>
+    <div id="prof-body">
+      <div id="prof-list"></div>
+      <div id="prof-detail"></div>
+    </div>
+    <div class="tut-nav">
+      <span id="prof-hint" class="ghost-btn" style="border:none">数据在每手结束后自动存到后端，跨会话累积</span>
+      <button id="prof-close" class="ghost-btn">关闭</button>
+    </div>
+  </div>
+</div>
+
+<!-- 破产重买弹窗 -->
+<div id="modal-rebuy" class="modal hidden">
+  <div class="modal-card">
+    <h2>💸 你破产了！</h2>
+    <p id="rebuy-text"></p>
+    <button id="btn-rebuy" class="primary">重新买入 1000</button>
+  </div>
+</div>
+
+<script src="static-backend.js"></script>
+<script src="core.js"></script>
+<script src="profile.js"></script>
+<script src="audio.js"></script>
+<script src="dealer.js"></script>
+<script src="game.js"></script>
+<script type="module" src="three-scene.js"></script>
+</body>
+</html>
