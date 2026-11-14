@@ -83,6 +83,10 @@ const Dealer = {
     if (c0) { c0.classList.remove('mode-photo', 'mode-video', 'mode-draw'); c0.classList.add('mode-' + this.mode); }
     const im0 = document.getElementById('dealer-photo');
     if (im0) im0.setAttribute('src', this.config().photo);
+    const mi = document.getElementById('mobile-dealer-img');
+    if (mi) mi.setAttribute('src', this.config().photo);
+    const mn = document.getElementById('mobile-dealer-name');
+    if (mn) mn.textContent = '✨ 荷官 · ' + this.config().name + ' ✨';
     const box = document.getElementById('dealer-looks');
     if (box) {
       box.innerHTML = Object.entries(DEALER_LOOKS).map(([k, v]) =>
@@ -271,6 +275,10 @@ const Dealer = {
     this.activeVideo = own ? own.url : null;   // 换人时切到该形象的专属视频
     try { localStorage.setItem('poker_dealer_look', key); } catch (e) {}
     this.render();
+    const mi = document.getElementById('mobile-dealer-img');
+    if (mi) mi.setAttribute('src', this.config().photo);
+    const mn = document.getElementById('mobile-dealer-name');
+    if (mn) mn.textContent = '✨ 荷官 · ' + this.config().name + ' ✨';
     this.applyMedia();
     document.querySelectorAll('.look-btn').forEach(b => b.classList.toggle('cur', b.dataset.look === key));
     const c = this.config();
@@ -300,6 +308,8 @@ const Dealer = {
     const el = document.getElementById('dealer-text');
     if (!bubble || !el) return;
     el.textContent = text;
+    const ml = document.getElementById('mobile-dealer-line');
+    if (ml) ml.textContent = text;
     bubble.classList.add('show');
     clearTimeout(this._sayTimer);
     this._sayTimer = setTimeout(() => bubble.classList.remove('show'), ms || 3200);

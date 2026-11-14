@@ -459,6 +459,7 @@ function renderMyHand() {
   const eq = G.advice && typeof G.advice.eq === 'number' ? G.advice.eq : null;
   read.innerHTML = [
     made ? `当前牌型 <b>${made}</b>` : (grade ? `起手评估 <b>${grade}</b>` : ''),
+    G.advice && G.advice.detail ? `<span class="mh-detail" style="color:#9fb3cf">${G.advice.detail}</span>` : '',
     eq !== null ? `胜率 <b>${(eq * 100).toFixed(1)}%</b>` : '',
     G.advice && G.advice.action ? `建议 <b>${G.advice.action}</b>` : '',
     hero.folded ? '<span style="color:#ff9a9a">本手已放弃</span>' : '',
@@ -553,50 +554,266 @@ function heroEquityNow() {
   return v;
 }
 
+
+/* ================= 起手牌范围 / 位置 / 策略引擎 =================
+ * 旧版把「8 人桌绝对摊牌胜率」直接和「单街底池赔率」比较，
+ * 而 8 人桌 AA 也只有约 39%、中等牌 10~15%，导致除超强牌外一律建议弃牌。
+ * 现在翻前按「位置 + 起手牌范围 + 前面动作」决策；翻后才用权益/赔率/听牌，
+ * 并且用 eq×人数（相对均分）而不是绝对胜率判断强弱。
+ */
+const RANK_TXT = r => r === 14 ? 'A' : r === 13 ? 'K' : r === 12 ? 'Q'
+  : r === 11 ? 'J' : r === 10 ? 'T' : String(r);
+
+function handCode(cards) {
+  if (!cards || cards.length < 2) return '';
+  const rs = cards.map(c => c.r).sort((a, b) => b - a);
+  const [hi, lo] = rs;
+  const suited = cards[0].s === cards[1].s;
+  return RANK_TXT(hi) + RANK_TXT(lo) + (hi === lo ? '' : (suited ? 's' : 'o'));
+}
+function scoreFromCode(code) {
+  const V = { A: 14, K: 13, Q: 12, J: 11, T: 10, 9: 9, 8: 8, 7: 7, 6: 6, 5: 5, 4: 4, 3: 3, 2: 2 };
+  const hi = V[code[0]], lo = V[code[1]];
+  if (!hi || !lo) return 0;
+  const suited = code[2] === 's';
+  return preflopStrength([{ r: hi, s: 's' }, { r: lo, s: suited ? 's' : 'h' }]);
+}
+
+/* 8 人桌相对庄家按钮的位置 */
+const POS_BY_OFFSET = ['SB', 'BB', 'UTG', 'UTG+1', 'MP', 'MP+1', 'CO', 'BTN'];
+function heroPos() {
+  const btn = G.dealerBtn | 0;
+  const off = (0 - ((btn + 1) % 8) + 8) % 8;
+  return POS_BY_OFFSET[off];
+}
+const POS_RANGE_KEY = {
+  SB: 'SB', BB: 'BB', UTG: 'UTG', 'UTG+1': 'UTG',
+  MP: 'MP', 'MP+1': 'CO', CO: 'CO', BTN: 'BTN',
+};
+
+/* 各位置可玩范围：open=主动加注开池门槛，call=可入池门槛（preflopStrength 分数） */
+const RANGE_TABLE = {
+  UTG: { label: 'UTG / UTG+1 早位', pct: '前 8%', open: .84, call: .74,
+         desc: '88+ / AJ+ / KQs / QJs；早位信息最少，只玩强牌' },
+  MP:  { label: 'MP 中位', pct: '前 15%', open: .75, call: .66,
+         desc: '77+ / A9s+ / ATo+ / KQ / QJs / JTs' },
+  CO:  { label: 'CO / MP+1', pct: '前 25%', open: .65, call: .58,
+         desc: '55+ / A2s+ / A9o+ / KJ+ / QTs+ / 同花连张' },
+  BTN: { label: 'BTN 庄家位', pct: '前 40%', open: .51, call: .46,
+         desc: '任意对子 / 任意 Ax / K8+ / Q9+ / J9+ / 同花连张' },
+  SB:  { label: 'SB 小盲', pct: '前 50%', open: .50, call: .42,
+         desc: '比 BTN 稍紧（翻后没位置）；补 10 很便宜时可放宽' },
+  BB:  { label: 'BB 大盲', pct: '任意两张', open: .72, call: .36,
+         desc: '无人加注免费看牌；面对加注按牌力防守' },
+};
+const DEFENSE = {
+  threeBet: .88, call: .64,
+  desc: '3bet：TT+ / AQs+ / AK；跟注：22+ / 同花连张 / AJo+ / KQ；其余弃牌',
+};
+const RANGE_TABS = [
+  ['UTG', 'UTG 早位'], ['MP', 'MP'], ['CO', 'CO'], ['BTN', 'BTN'],
+  ['SB', 'SB'], ['BB', 'BB'], ['VS_OPEN', '面对加注'],
+];
+
+function gradeHand(score) {
+  if (score >= .90) return { key: 'S', label: 'S 级 · 超强', pct: '前 3%' };
+  if (score >= .80) return { key: 'A', label: 'A 级 · 强牌', pct: '前 8%' };
+  if (score >= .68) return { key: 'B', label: 'B 级 · 可开池', pct: '前 18%' };
+  if (score >= .54) return { key: 'C', label: 'C 级 · 可入池', pct: '前 35%' };
+  if (score >= .40) return { key: 'D', label: 'D 级 · 边缘', pct: '前 55%' };
+  return { key: 'E', label: 'E 级 · 弱牌', pct: '后 45%' };
+}
+
 function refreshAdvice() {
   const hero = G.players[0];
   if (!hero || hero.hole.length < 2) { G.advice = null; renderRoundPanel(); renderMyHand(); return null; }
   const eq = heroEquityNow();
   const toCall = Math.max(0, G.currentBet - hero.bet);
   const potNow = totalPot();
-  const potOdds = toCall > 0 ? toCall / (potNow + toCall) : 0;
   const draws = computeDraws(hero.hole, G.board);
-  let action, why, bet = 0, betLabel = '';
-  if (toCall > 0) {
-    if (eq >= potOdds + 0.18) {
-      action = '加注'; betLabel = '加注到';
-      bet = Math.min(hero.bet + hero.chips,
-        Math.max(G.currentBet + G.minRaise, Math.round((G.currentBet + potNow * 0.6) / 10) * 10));
-      why = '胜率明显高于跟注门槛，主动加注榨取价值';
-    } else if (eq >= potOdds + 0.03) {
-      action = '跟注';
-      why = `胜率 ${(eq * 100).toFixed(1)}% ≥ 跟注所需 ${(potOdds * 100).toFixed(1)}%`;
-    } else if (draws.outs >= 8 && eq >= potOdds - 0.10) {
-      action = '跟注追牌';
-      why = `有 ${draws.outs} 张补牌，隐含赔率可补差价`;
+  const boardLen = G.board.length;
+  const preflop = boardLen === 0;
+  const alive = notFolded().length;
+  const pos = heroPos();
+  const rk = POS_RANGE_KEY[pos] || 'MP';
+  const range = RANGE_TABLE[rk];
+  const score = preflopStrength(hero.hole);
+  const grade = gradeHand(score);
+  const code = handCode(hero.hole);
+  const openRaiser = G.stage === 'preflop' ? (G.openRaiser || '') : '';
+  const bigRaise = G.currentBet >= G.bb * 6;
+
+  /* 底池赔率：只算已进池的钱（不含自己本轮已投的注） */
+  const othersBet = G.players.reduce((sum, p) => p === hero ? sum : sum + p.bet, 0);
+  const potBefore = G.pot + othersBet;
+  const need = toCall > 0 ? toCall / Math.max(1, potBefore + toCall) : 0;
+  const rel = eq * alive;   // >1 表示强于「按人数均分」的期望
+
+  let madeCat = -1, madeName = '';
+  if (boardLen >= 3) {
+    try {
+      const sc = best7(hero.hole.concat(G.board)).score;
+      madeCat = handCat(sc); madeName = handName(sc);
+    } catch (e) { /* 牌面未齐时忽略 */ }
+  }
+
+  let action, why, bet = 0, betLabel = '', rangeTip = '';
+
+  if (preflop) {
+    const vsOpen = !!openRaiser || G.currentBet > G.bb;
+    if (vsOpen) {
+      /* 已有人开池：用更紧的防守范围 */
+      if (score >= DEFENSE.threeBet && !bigRaise) {
+        action = '再加注(3bet)'; betLabel = '再加注到';
+        bet = Math.min(hero.bet + hero.chips,
+          Math.round(Math.max(G.currentBet * 2.6, G.bb * 8) / 10) * 10);
+        why = `${code} 是 ${grade.label}（${grade.pct}），对抗 ${openRaiser || '对手'} 的开池范围仍有优势，用 3bet 夺回主动权`;
+      } else if (score >= DEFENSE.call && !bigRaise) {
+        action = '跟注';
+        why = `${code} 在防守范围内，跟注看翻牌；命中两对以上或强听牌再继续，没击中就果断弃`;
+      } else {
+        action = '弃牌';
+        why = `${code} 是 ${grade.label}（${grade.pct}），不在「对抗开池」防守范围内；${bigRaise ? '这注加得很大，' : ''}别用弱牌去碰对方的强范围`;
+      }
+      rangeTip = `面对加注该玩：${DEFENSE.desc}`;
+    } else if (pos === 'BB' && toCall === 0) {
+      action = '过牌';
+      why = `大盲免费看牌，${code} 任意两张都值得看翻牌；${score >= .72 ? '这手其实很强，若有人加注可以反击' : '没击中就直接过牌/弃牌'}`;
+      rangeTip = `BB 防守：${range.desc}`;
     } else {
-      action = '弃牌';
-      why = `胜率 ${(eq * 100).toFixed(1)}% < 跟注所需 ${(potOdds * 100).toFixed(1)}%，长期亏`;
+      /* 无人开池：按位置范围主动开池 */
+      const cheap = toCall <= G.bb;   // SB 补 10 / 平跟 20 都很便宜
+      if (score >= range.open) {
+        action = '加注开池'; betLabel = '加注到';
+        bet = Math.min(hero.bet + hero.chips,
+          Math.max(G.bb * 3, Math.round(potNow * 0.75 / 10) * 10));
+        why = `${code} 是 ${grade.label}（${grade.pct}），在 ${pos} 的开池范围（${range.pct}）里；前面无人加注，主动加注约 3BB 偷盲 + 隔离对手`;
+      } else if (score >= range.call || (cheap && score >= .40)) {
+        action = (cheap && score < range.call) ? '便宜跟注' : '跟注';
+        why = `${code} 在 ${pos} 的可玩范围（${range.pct}）内，${cheap ? '补注很便宜，' : '平跟看翻牌，'}但别用边缘牌翻前加注`;
+      } else {
+        action = '弃牌';
+        why = `${code} 是 ${grade.label}（${grade.pct}），不在 ${pos} 开池范围（${range.pct}）内；8 人桌用这手牌入池长期是亏的`;
+      }
+      rangeTip = `${pos} 该玩：${range.desc}`;
     }
   } else {
-    if (eq >= 0.62) {
-      action = '下注'; betLabel = '下注';
-      bet = Math.min(hero.chips, Math.max(G.bb, Math.round(potNow * 0.5 / 10) * 10));
-      why = '牌力强，主动下注收价值';
-    } else if (eq >= 0.42) {
-      action = '过牌 / 小额下注'; betLabel = '小额下注';
-      bet = Math.min(hero.chips, Math.max(G.bb, Math.round(potNow / 3 / 10) * 10));
-      why = '中等牌力，控池为主';
+    /* 翻后：成牌牌型 + 相对权益 + 赔率 + 听牌 */
+    const strongMade = madeCat >= 2;
+    const drawPct = draws.pct || 0;
+    if (toCall > 0) {
+      const callFloor = Math.max(0, need - .04);
+      if ((eq >= need + .10 && rel >= .85 && madeCat >= 1) || (strongMade && eq >= need - .02)) {
+        action = '加注'; betLabel = '加注到';
+        bet = Math.min(hero.bet + hero.chips,
+          Math.max(G.currentBet + G.minRaise, Math.round((G.currentBet + potNow * .65) / 10) * 10));
+        why = `${madeName || '成牌'}，胜率 ${(eq * 100).toFixed(1)}% 高于跟注所需 ${(need * 100).toFixed(1)}%，加注收价值并让听牌付钱`;
+      } else if (eq >= callFloor
+        || (draws.outs >= 8 && eq + drawPct * .5 >= need - .04)
+        || (strongMade && need < .38)) {
+        action = '跟注';
+        why = `胜率 ${(eq * 100).toFixed(1)}% vs 跟注所需 ${(need * 100).toFixed(1)}%`
+          + (draws.outs >= 8 ? `，另有 ${draws.outs} 张补牌（≈${(drawPct * 100).toFixed(0)}%）` : '')
+          + `；${strongMade ? '已成牌，继续' : '可看下一张，没改善就撤'}`;
+      } else {
+        action = '弃牌';
+        why = `${madeName || '未成牌'}，胜率 ${(eq * 100).toFixed(1)}% 低于跟注所需 ${(need * 100).toFixed(1)}%`
+          + (draws.outs ? `，补牌也只有 ${draws.outs} 张` : '，也没有听牌') + '；这注不追';
+      }
     } else {
-      action = '过牌';
-      why = '牌力偏弱，免费看下一张';
+      if (strongMade || (rel >= .9 && madeCat >= 1)) {
+        action = '下注'; betLabel = '下注';
+        bet = Math.min(hero.chips, Math.max(G.bb, Math.round(potNow * .55 / 10) * 10));
+        why = `${madeName || '顶对'}，无人下注时主动要价值（约 ½~⅔ 池），别慢打让听牌免费看牌`;
+      } else if (draws.outs >= 9) {
+        action = '小额下注 / 过牌'; betLabel = '半诈唬下注';
+        bet = Math.min(hero.chips, Math.max(G.bb, Math.round(potNow / 3 / 10) * 10));
+        why = `${draws.outs} 张补牌（≈${(drawPct * 100).toFixed(0)}%），可以半诈唬下注；被加注再按赔率算`;
+      } else if (madeCat >= 1 || rel >= .55) {
+        action = '过牌';
+        why = `${madeName || '中等牌力'}，先控池看下一张，遇到大额下注再按赔率决定`;
+      } else {
+        action = '过牌';
+        why = `${madeName || '未击中'}，免费看牌；有人下注且胜率不够就果断弃`;
+      }
     }
+    rangeTip = '翻后看的是成牌牌型 / 相对权益 / 补牌数 / 底池赔率，不再只看翻前那两张牌';
   }
-  G.advice = { eq, toCall, potOdds, potNow, draws, alive: notFolded().length, action, why, bet, betLabel };
+
+  G.advice = {
+    eq, toCall, potOdds: need, potNow, draws, alive, action, why, bet, betLabel,
+    code, score, grade, pos, range, rangeTip,
+    detail: `${code} · ${grade.label}（${grade.pct}） · ${pos}`,
+    madeName, madeCat,
+  };
   renderRoundPanel();
   renderMyHand();
   return G.advice;
 }
+
+/* ---- 起手牌范围表（13×13 矩阵）---- */
+let rangeTab = 'BTN';
+function rangeMatrixHTML(key) {
+  const R = ['A', 'K', 'Q', 'J', 'T', '9', '8', '7', '6', '5', '4', '3', '2'];
+  const defMode = key === 'VS_OPEN';
+  const tbl = RANGE_TABLE[key] || RANGE_TABLE.MP;
+  const cur = G.advice ? G.advice.code : '';
+  let h = '<div class="rg-grid"><div class="rg-c rg-corner"></div>';
+  h += R.map(r => `<div class="rg-c rg-h">${r}</div>`).join('');
+  for (let i = 0; i < 13; i++) {
+    h += `<div class="rg-c rg-h">${R[i]}</div>`;
+    for (let j = 0; j < 13; j++) {
+      const a = R[Math.min(i, j)], b = R[Math.max(i, j)];
+      const code = i === j ? a + b : (j > i ? a + b + 's' : a + b + 'o');
+      const sc = scoreFromCode(code);
+      let cls = 'rg-fold', label = code;
+      if (defMode) {
+        if (sc >= DEFENSE.threeBet) cls = 'rg-3bet';
+        else if (sc >= DEFENSE.call) cls = 'rg-call';
+      } else if (key === 'BB') {
+        if (sc >= tbl.open) cls = 'rg-open'; else cls = 'rg-call';
+      } else {
+        if (sc >= tbl.open) cls = 'rg-open';
+        else if (sc >= tbl.call) cls = 'rg-call';
+      }
+      if (code === cur) cls += ' cur';
+      h += `<div class="rg-c ${cls}" title="${code} 强度 ${sc.toFixed(2)}">${label}</div>`;
+    }
+  }
+  return h + '</div>';
+}
+function renderStrategy() {
+  const tabs = $('strat-tabs'), grid = $('range-grid'), sum = $('strat-summary'), ex = $('strat-explain');
+  if (!tabs || !grid) return;
+  tabs.innerHTML = RANGE_TABS.map(([k, n]) =>
+    `<button class="rg-tab ${k === rangeTab ? 'cur' : ''}" data-rg="${k}">${n}</button>`).join('');
+  tabs.querySelectorAll('.rg-tab').forEach(b => {
+    b.onclick = () => { rangeTab = b.dataset.rg; renderStrategy(); };
+  });
+  grid.innerHTML = rangeMatrixHTML(rangeTab);
+  const a = G.advice;
+  const defMode = rangeTab === 'VS_OPEN';
+  const tbl = RANGE_TABLE[rangeTab] || RANGE_TABLE.MP;
+  sum.innerHTML = a
+    ? `你当前这手：<b>${a.code}</b> · ${a.grade.label}（${a.grade.pct}） · 位置 <b>${a.pos}</b><br>`
+      + `建议：<b>${a.action}</b> —— ${a.why}<br><span style="color:#9fb3cf">${a.rangeTip}</span>`
+    : '入座开局后，这里会实时解读你的手牌属于哪个档位、当前位置该不该玩。';
+  ex.innerHTML = defMode
+    ? `<b>面对别人的加注</b>：紫色 = 可以 3bet 反击（${DEFENSE.desc.split('；')[0]}），绿色 = 可以跟注看翻牌，灰色 = 弃牌。<br>`
+      + `关键：别人开池代表的是强范围，你要比自己开池时更紧一档；没有位置、加注很大时再收紧。`
+    : `<b>${tbl.label}</b>（${tbl.pct}）：<span class="rg-legend-inline">`
+      + `<i class="rg-open"></i>金色 = 主动加注开池　<i class="rg-call"></i>绿色 = 可以跟注入池　<i class="rg-fold"></i>灰色 = 弃牌</span><br>`
+      + `该玩的牌：${tbl.desc}。<br>`
+      + `位置越靠后（BTN &gt; CO &gt; MP &gt; UTG）能玩的牌越多，因为你可以看别人先行动；`
+      + `早位容易被后面的人反打，所以只玩强牌。BB 无人加注时是免费看牌，任意两张都能看翻牌。`;
+}
+function openStrategy() {
+  rangeTab = POS_RANGE_KEY[heroPos()] || 'BTN';
+  renderStrategy();
+  const m = $('modal-strategy');
+  if (m && m.classList.remove) m.classList.remove('hidden');
+}
+
 
 function recordAction(p, act, amt, extra) {
   const item = { name: p.name, act, amt: amt || 0, me: !!p.isHero, extra: extra || '' };
@@ -762,10 +979,11 @@ function renderRoundPanel() {
   }
   const eqCls = a.eq >= a.potOdds + 0.03 ? 'eq-good' : ((a.eq < a.potOdds - 0.03 && a.toCall > 0) ? 'eq-bad' : '');
   $('rp-numbers').innerHTML = `胜率 <b class="${eqCls}">${(a.eq * 100).toFixed(1)}%</b> · 赔率 ${(a.potOdds * 100).toFixed(1)}% · ${a.draws.text}`;
-  $('rp-advice').innerHTML = `💡 建议：${a.action}<span class="why"> · ${a.why}</span>`;
-  $('rp-bet').textContent = a.bet > 0
-    ? `👉 建议${a.betLabel} ${fmt(a.bet)}（约 ${Math.round(a.bet / Math.max(1, a.potNow) * 100)}% 底池）`
-    : '👉 不投入额外筹码，保留实力';
+  $('rp-advice').innerHTML = `💡 建议：<b>${a.action}</b><span class="why">${a.detail}｜${a.why}</span>`;
+  $('rp-bet').innerHTML = (a.bet > 0
+      ? `👉 建议${a.betLabel} <b>${fmt(a.bet)}</b>（约 ${Math.round(a.bet / Math.max(1, a.potNow) * 100)}% 底池）`
+      : '👉 不投入额外筹码，保留实力')
+    + ` <span class="rg-link" title="打开起手牌范围表">📋 哪些牌该玩？</span>`;
 }
 
 /* ================= 渲染 ================= */
@@ -1302,14 +1520,19 @@ const TUT_PAGES = [
     </div>`,
   },
   {
-    title: '🧮 第 4 课 · 起手牌强弱',
+    title: '🧮 第 4 课 · 起手牌范围与位置',
     html: `<div class="tut">
-      <p>翻牌前两张底牌的强弱大致排序：</p>
-      <p>🥇 <b>对子</b>：AA 最好（8人桌胜率约 39%），KK QQ JJ 次之，小对子（22-55）博暗三条</p>
-      <p>🥈 <b>高牌同花连张</b>：AK、AQ 同花能中大对子或同花</p>
-      <p>🥉 <b>同花连张</b>：78 同花这类能做顺子/同花，适合便宜入池</p>
-      <p>❌ <b>垃圾牌</b>：72、93 不同花不连张——多数时候该弃</p>
-      <div class="tipbox">💡 8人桌人多，任何牌的胜率都被摊薄，起手要更严格。打开顶栏「💡提示」可实时看蒙特卡洛估算胜率。</div>
+      <p>翻前不是「看胜率决定玩不玩」，而是<b>按位置选一个可玩范围</b>：位置越靠后，能玩的牌越多。8 人桌人多，早位尤其要紧。</p>
+      <table class="rank-table">
+        <tr><th>位置</th><th>建议范围</th><th>该玩的牌</th></tr>
+        <tr><td>UTG 早位</td><td>前 8%</td><td>88+ / AJ+ / KQs</td></tr>
+        <tr><td>MP 中位</td><td>前 15%</td><td>77+ / ATo+ / KQ / JTs</td></tr>
+        <tr><td>CO</td><td>前 25%</td><td>55+ / A9o+ / KJ+ / 同花连张</td></tr>
+        <tr><td>BTN 庄家</td><td>前 40%</td><td>任意对子 / 任意 Ax / K8+ / Q9+</td></tr>
+        <tr><td>SB / BB</td><td>补注便宜更宽</td><td>BB 无人加注可免费看任意两张</td></tr>
+      </table>
+      <p><b>有人先加注时</b>把范围收紧一档：只用 TT+ / AQs+ / AK 去 3bet，用 22+ / 同花连张 / AJo+ 跟注，其余弃牌。</p>
+      <div class="tipbox">💡 点顶栏「🎯 范围表」可看 13×13 手牌矩阵：<b>金色</b>=加注开池、<b>绿色</b>=可跟注、<b>灰色</b>=弃牌，还会用红框标出你当前这手牌，并解释为什么给这个建议。</div>
     </div>`,
   },
   {
@@ -1329,7 +1552,7 @@ const TUT_PAGES = [
       <p>3️⃣ 多人跟注时，你的对子/顶对价值下降，别恋战。</p>
       <p>4️⃣ 输了几手别上头（Tilt），弃牌也是省钱。</p>
       <p>5️⃣ 记住：每一手都是独立事件，长期打期望值。</p>
-      <div class="tipbox">💡 打开「💡提示」边玩边学；牌桌中央的「📊 局势」面板会实时给出胜率、底池赔率、听牌与建议动作（含建议下注额），胜率低于 20% 的时候大部分时候该跑就跑。祝你在金鳄会旗开得胜！</div>
+      <div class="tipbox">💡 8 人桌所有人的绝对胜率都被摊薄（AA 也只有约 39%），所以别只看一个百分比就弃牌：局势面板会写清「这手牌什么档位 / 当前位置该不该玩 / 为什么给这个动作 / 建议下注多少」，配「🎯 范围表」一起看。祝旗开得胜！</div>
     </div>`,
   },
 ];
@@ -1363,6 +1586,20 @@ function bindEvents() {
     };
   });
   $('btn-tutorial').onclick = () => { tutPage = 0; renderTut(); $('modal-tutorial').classList.remove('hidden'); };
+  const md = $('mobile-dealer');
+  if (md) md.onclick = () => {
+    const keys = ['greet', 'deal', 'shuffle', 'cheer', 'think', 'wow', 'heart', 'cheers'];
+    dealerAct(keys[Math.floor(Math.random() * keys.length)]);
+    const lines = ['哎哟，点我干嘛呀～', '想让我再发一手吗？', '别急嘛，慢慢玩～', '看我看我，牌可在我手里哦～'];
+    sfx('dealerSay', lines[Math.floor(Math.random() * lines.length)]);
+  };
+  const bs = $('btn-strategy');
+  if (bs) bs.onclick = openStrategy;
+  const sc = $('strat-close');
+  if (sc) sc.onclick = () => $('modal-strategy').classList.add('hidden');
+  document.addEventListener('click', e => {
+    if (e && e.target && e.target.classList && e.target.classList.contains('rg-link')) openStrategy();
+  });
   $('btn-start-tutorial').onclick = () => { tutPage = 0; renderTut(); $('modal-tutorial').classList.remove('hidden'); };
   $('tut-prev').onclick = () => { if (tutPage > 0) { tutPage--; renderTut(); } };
   $('tut-next').onclick = () => {
@@ -1475,6 +1712,9 @@ window.addEventListener('DOMContentLoaded', () => {
     const params = new URLSearchParams(location.search);
     if (params.get('tutorial') === '1') {
       tutPage = 0; renderTut(); $('modal-tutorial').classList.remove('hidden');
+    }
+    if (params.get('range') === '1') {
+      setTimeout(openStrategy, 900);
     }
     if (params.get('demo') === '1') {
       $('input-name').value = '演示侠';

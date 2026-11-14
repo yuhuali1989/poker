@@ -908,3 +908,172 @@ body.t3d #btn-3d-face { font-size: 10px; padding: 4px 7px; width: 100%; }
   body.t3d #table { min-height: 0; height: 300px; }
   body.t3d #table3d { height: 300px; }
 }
+
+
+/* ================= 起手牌范围表 / 策略弹窗 ================= */
+#modal-strategy .modal-card { max-width: 660px; text-align: center; }
+#strat-tabs { display: flex; flex-wrap: wrap; gap: 5px; justify-content: center; margin: 8px 0 10px; }
+.rg-tab {
+  background: #222d40; color: #cbd8ec; border: 1px solid #3d4c66;
+  border-radius: 6px; padding: 6px 10px; font-size: 11px; cursor: pointer;
+}
+.rg-tab.cur { background: var(--gold); color: #3a2600; border-color: var(--gold); font-weight: bold; }
+#strat-summary {
+  background: rgba(245,196,81,.09); border-left: 3px solid var(--gold);
+  border-radius: 0 8px 8px 0; padding: 8px 12px; font-size: 12px;
+  line-height: 1.75; color: #ecdfbe; text-align: left; margin-bottom: 10px;
+}
+#strat-summary b { color: var(--gold); font-size: 14px; }
+#range-grid { overflow-x: auto; display: flex; justify-content: center; }
+.rg-grid { display: grid; grid-template-columns: repeat(14, 25px); gap: 1px; font-size: 9px; }
+.rg-c {
+  width: 25px; height: 18px; line-height: 18px; text-align: center;
+  border-radius: 2px; white-space: nowrap; overflow: hidden;
+}
+.rg-h { color: var(--gold); font-weight: bold; background: transparent; }
+.rg-fold { background: #232b39; color: #77869c; }
+.rg-call { background: #20543a; color: #a5f0bd; }
+.rg-open { background: #a8801f; color: #fff7dc; font-weight: bold; }
+.rg-3bet { background: #6b2a75; color: #f3ccff; font-weight: bold; }
+.rg-c.cur { outline: 2px solid #ff5c7a; outline-offset: -2px; }
+.rg-legend {
+  display: flex; gap: 12px; justify-content: center; flex-wrap: wrap;
+  font-size: 10px; color: #9fb3cf; margin: 9px 0;
+}
+.rg-legend i, .rg-legend-inline i {
+  display: inline-block; width: 10px; height: 10px; border-radius: 2px;
+  margin-right: 3px; vertical-align: middle;
+}
+#strat-explain { font-size: 11.5px; color: #b9c8de; line-height: 1.85; text-align: left; margin: 8px 0 12px; }
+#strat-explain b { color: var(--gold); }
+.rg-link {
+  color: #ffd76a; cursor: pointer; text-decoration: underline;
+  text-underline-offset: 2px; margin-left: 8px; white-space: nowrap;
+}
+.rg-link:hover { color: #fff0b8; }
+#rp-advice .why {
+  display: block; font-size: 9.5px; font-weight: normal;
+  color: #a7b6cc; line-height: 1.45; max-height: 28px; overflow: hidden;
+}
+#rp-advice b { color: var(--gold); }
+@media (max-width: 720px) {
+  #modal-strategy .modal-card { padding: 14px 10px; width: 98%; max-height: 90vh; }
+  .rg-grid { grid-template-columns: repeat(14, 22px); font-size: 8px; }
+  .rg-c { width: 22px; height: 16px; line-height: 16px; }
+  .rg-tab { font-size: 10px; padding: 6px 7px; }
+  #strat-summary { font-size: 11px; }
+  #strat-explain { font-size: 10.5px; }
+  .rg-legend { gap: 7px; font-size: 9px; }
+  #rp-advice .why { max-height: 40px; }
+}
+
+
+/* ================= 手机端视觉升级：头像 / 桌圈 / 荷官形象 ================= */
+#mobile-dealer { display: none; }
+@media (max-width: 720px) {
+  /* 桌圈：金色椭圆内圈 + 深绿毡面，座位与牌浮在圈上 */
+  #table::before {
+    inset: auto; left: 50%; top: 50%; transform: translate(-50%, -50%);
+    width: 88%; height: 47%; border-radius: 50%;
+    border: 2px solid rgba(245, 196, 81, .42);
+    background: radial-gradient(ellipse at center, rgba(28, 107, 63, .55), rgba(13, 61, 36, .3));
+    box-shadow: 0 0 0 6px rgba(0, 0, 0, .2), inset 0 0 30px rgba(0, 0, 0, .38);
+    z-index: 0; pointer-events: none;
+  }
+  #table .seat, #community, #round-panel, #mobile-dealer { position: relative; z-index: 1; }
+
+  /* 每位牌手：大圆头像置顶的「坐在桌边」小卡 */
+  #table .seat .plate {
+    display: block; padding: 4px 2px 5px; border-radius: 12px;
+    background: rgba(9, 16, 28, .84);
+    border: 1px solid rgba(245, 196, 81, .3);
+    box-shadow: 0 3px 10px rgba(0, 0, 0, .5);
+  }
+  #table .seat .plate.active { border-color: var(--gold); box-shadow: 0 0 14px rgba(245, 196, 81, .6); }
+  .seat-face {
+    display: block; width: 34px; height: 34px; margin: 0 auto 2px;
+    border-radius: 50%; border: 2px solid rgba(245, 196, 81, .6);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, .6);
+  }
+  #table .seat .plate .pname { font-size: 9px; line-height: 1.25; }
+  #table .seat .plate .pchips { font-size: 10px; }
+  .status-badge { font-size: 7.5px; }
+
+  /* 桌心：公共牌放在椭圆毡面上 */
+  #community {
+    background: radial-gradient(ellipse at center, rgba(10, 58, 34, .93), rgba(6, 32, 20, .8));
+    border: 1px solid rgba(245, 196, 81, .35);
+    border-radius: 46px; padding: 6px 4px 5px;
+    box-shadow: inset 0 0 18px rgba(0, 0, 0, .35);
+  }
+  #pot-display { font-size: 12px; }
+
+  /* 桌子对面的荷官：圆形头像 + 名牌 + 台词 + 点击互动 */
+  #mobile-dealer {
+    display: flex; grid-column: 1 / -1; order: 0;
+    align-items: center; gap: 8px; cursor: pointer;
+    padding: 4px 7px 4px 4px; border-radius: 40px;
+    background: linear-gradient(90deg, rgba(74, 16, 45, .92), rgba(22, 14, 34, .9));
+    border: 1px solid rgba(245, 196, 81, .5);
+    box-shadow: 0 3px 16px rgba(0, 0, 0, .55), inset 0 0 18px rgba(255, 140, 180, .08);
+  }
+  #mobile-dealer:active { transform: scale(.98); }
+  #mobile-dealer-img {
+    width: 50px; height: 50px; flex-shrink: 0; border-radius: 50%;
+    object-fit: cover; object-position: 50% 12%;
+    border: 2px solid var(--gold); box-shadow: 0 0 12px rgba(245, 196, 81, .55);
+  }
+  #mobile-dealer-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+  #mobile-dealer-name { font-size: 11px; color: var(--gold); white-space: nowrap; }
+  #mobile-dealer-line {
+    font-size: 9.5px; color: #f0d3e0;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  #mobile-dealer-tap {
+    flex-shrink: 0; background: rgba(245, 196, 81, .16); color: var(--gold);
+    border: 1px solid rgba(245, 196, 81, .55); border-radius: 20px;
+    padding: 6px 9px; font-size: 10px; min-height: 32px;
+  }
+  /* 原荷官迷你照片卡收起，控制台只留动作与打赏 */
+  #dealer-card, #dealer-speech { display: none; }
+  #dealer-console { gap: 3px; }
+  #dealer-actions .act-btn { min-height: 30px; font-size: 10px; }
+  #tip-bar { font-size: 9px; }
+
+  /* 3D 模式下不显示 2D 桌圈与手机荷官条 */
+  body.t3d #mobile-dealer { display: none; }
+  body.t3d #table::before { display: none; }
+  body.t3d .seat-face { width: 18px; height: 18px; border-width: 1px; }
+}
+
+/* 手机端修正：relative 会激活桌面版的 left/top 百分比偏移，必须显式清空 */
+@media (max-width: 720px) {
+  #table .seat, #community, #round-panel {
+    left: auto; right: auto; top: auto; bottom: auto;
+    transform: none;
+  }
+  body.t3d .seat { transform: translate(-50%, -50%); }
+  body.t3d #community { transform: translateX(-50%); }
+  /* 手牌读数独占一行，避免被挤压成乱七八糟的断行 */
+  #my-hand { flex-wrap: wrap; }
+  #mh-read { flex: 1 1 100%; order: 3; font-size: 10px; line-height: 1.5; overflow-wrap: normal; word-break: break-word; }
+}
+
+/* 手机端：局势面板不再被 grid 压扁，策略理由要看得见 */
+@media (max-width: 720px) {
+  #table { flex: 0 0 auto; min-height: 0; align-content: start; }
+  #round-panel { max-height: none; overflow: visible; }
+  #rp-advice .why { max-height: 46px; }
+  .mh-detail { display: none; }
+  #dealer-corner { flex: 0 0 auto; }
+}
+
+/* 手机 3D：座位必须回到绝对定位环绕（2D 网格用的 relative 会让它堆成块） */
+@media (max-width: 720px) {
+  body.t3d #table .seat {
+    position: absolute;
+    transform: translate(-50%, -50%);
+  }
+  body.t3d #table .seat .plate { transform: none; }
+  body.t3d #t3d-cam-bar { display: none; }
+}

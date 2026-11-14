@@ -19,6 +19,7 @@
     </div>
     <div class="top-btns">
       <button id="btn-tutorial" class="ghost-btn">📖 教学</button>
+      <button id="btn-strategy" class="ghost-btn">🎯 范围表</button>
       <button id="btn-panel" class="ghost-btn">📊 局势:开</button>
       <button id="btn-intel" class="ghost-btn">🔍 情报:开</button>
       <button id="btn-hint" class="ghost-btn">💡 提示:关</button>
@@ -36,6 +37,15 @@
       <div id="table">
         <div id="table-logo">GOLDEN CROC CLUB</div>
         <div id="shout-toast"></div>
+        <!-- 手机专用：桌子对面的荷官形象（桌面隐藏） -->
+        <div id="mobile-dealer">
+          <img id="mobile-dealer-img" src="dealers/vivian.png" alt="荷官">
+          <div id="mobile-dealer-info">
+            <b id="mobile-dealer-name">✨ 荷官 · 薇薇 ✨</b>
+            <span id="mobile-dealer-line">今晚由我陪你玩～</span>
+          </div>
+          <button id="mobile-dealer-tap">👋 互动</button>
+        </div>
         <!-- 公共牌 -->
         <div id="community">
           <div id="pot-display">底池 <b id="pot-num">0</b></div>
@@ -203,6 +213,27 @@
       <span id="prof-hint" class="ghost-btn" style="border:none">数据在每手结束后自动存到后端，跨会话累积</span>
       <button id="prof-close" class="ghost-btn">关闭</button>
     </div>
+  </div>
+</div>
+
+
+<!-- 起手牌范围 / 策略说明 -->
+<div id="modal-strategy" class="modal hidden">
+  <div class="modal-card wide">
+    <h2>🎯 哪些牌该玩？起手牌范围与策略</h2>
+    <p class="fineprint">按位置选范围；金色=主动加注，绿色=可跟注，紫色=可 3bet，灰色=弃牌</p>
+    <div id="strat-tabs"></div>
+    <div id="strat-summary"></div>
+    <div id="range-grid"></div>
+    <div class="rg-legend">
+      <span><i class="rg-open"></i>加注开池</span>
+      <span><i class="rg-call"></i>可跟注入池</span>
+      <span><i class="rg-3bet"></i>可 3bet 反击</span>
+      <span><i class="rg-fold"></i>弃牌</span>
+      <span>红框 = 你当前这手牌</span>
+    </div>
+    <div id="strat-explain"></div>
+    <button id="strat-close" class="primary">明白了</button>
   </div>
 </div>
 
