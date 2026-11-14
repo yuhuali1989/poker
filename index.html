@@ -27,6 +27,8 @@
       <button id="btn-sfx" class="ghost-btn">🔊 声音:开</button>
       <button id="btn-3d" class="ghost-btn">🎲 3D 桌:开</button>
       <button id="btn-profiles" class="ghost-btn">🧠 档案</button>
+      <button id="btn-review" class="ghost-btn">📖 复盘</button>
+      <button id="btn-speed" class="ghost-btn">🐢 速度:慢</button>
       <button id="btn-rank" class="ghost-btn">🏆 排行榜</button>
     </div>
   </header>
@@ -217,6 +219,27 @@
   </div>
 </div>
 
+
+
+<!-- 每手复盘：浮层 + 完整弹窗 -->
+<div id="review-toast" class="hidden">
+  <div class="rv-head"><b>📖 第 <span id="rv-toast-no">0</span> 手复盘</b><button id="rv-toast-close" title="关闭">✕</button></div>
+  <div id="rv-toast-body"></div>
+  <button id="rv-toast-more">查看完整复盘 →</button>
+</div>
+<div id="modal-review" class="modal hidden">
+  <div class="modal-card wide">
+    <h2>📖 每手复盘</h2>
+    <p class="fineprint">每一手结束都会复盘，不管你有没有参与摊牌；含全场脉络、对你的判断和下次打法</p>
+    <div id="rv-nav">
+      <button id="rv-prev" class="ghost-btn">← 更早</button>
+      <span id="rv-page">—</span>
+      <button id="rv-next" class="ghost-btn">更新 →</button>
+    </div>
+    <div id="review-body"></div>
+    <button id="review-close" class="primary">关闭</button>
+  </div>
+</div>
 
 <!-- 起手牌范围 / 策略说明 -->
 <div id="modal-strategy" class="modal hidden">

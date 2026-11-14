@@ -1148,3 +1148,73 @@ body.t3d #btn-3d-face { font-size: 10px; padding: 4px 7px; width: 100%; }
     top: 1px; right: 2px; font-size: 7px; padding: 0 3px; border-radius: 4px;
   }
 }
+
+
+/* ================= 座位位置标注 ================= */
+.pos-badge {
+  display: inline-block; margin-right: 3px; padding: 0 4px;
+  border-radius: 4px; font-size: 9px; font-weight: bold;
+  color: #bcd0ee; background: rgba(72, 104, 156, .35);
+  border: 1px solid rgba(140, 175, 225, .38);
+  vertical-align: middle; letter-spacing: .3px;
+}
+.pos-badge.btn-pos {
+  color: #3a2600; background: var(--gold); border-color: var(--gold);
+}
+.ir-top .pos-badge { font-size: 8px; padding: 0 3px; margin-right: 4px; }
+@media (max-width: 720px) {
+  .pos-badge { font-size: 7px; padding: 0 2px; margin-right: 1px; border-radius: 3px; }
+  .ir-top .pos-badge { font-size: 7px; }
+}
+
+
+/* ================= 每手复盘 ================= */
+#review-toast {
+  position: fixed; right: 14px; bottom: 14px; width: 340px; z-index: 40;
+  background: linear-gradient(180deg, rgba(20, 30, 48, .97), rgba(10, 16, 28, .97));
+  border: 1px solid rgba(245, 196, 81, .5); border-radius: 12px;
+  box-shadow: 0 8px 34px rgba(0, 0, 0, .7); padding: 9px 12px 10px;
+  font-size: 11px; line-height: 1.6; color: #d4e0f2;
+  animation: rvIn .35s ease-out;
+}
+#review-toast.hidden { display: none; }
+@keyframes rvIn { from { transform: translateY(14px); opacity: 0; } to { transform: none; opacity: 1; } }
+.rv-head { display: flex; justify-content: space-between; align-items: center; color: var(--gold); font-size: 12px; margin-bottom: 5px; }
+.rv-head button { background: none; border: 0; color: #8fa0b8; font-size: 14px; cursor: pointer; }
+.rv-res { color: #ffe6a8; font-weight: bold; }
+.rv-line2 { color: #9fb3cf; }
+.rv-hero { margin-top: 4px; color: #dce8f8; max-height: 46px; overflow: hidden; }
+.rv-tip { margin-top: 4px; color: #ffd76a; }
+#rv-toast-more {
+  margin-top: 7px; background: rgba(245, 196, 81, .16); color: var(--gold);
+  border: 1px solid rgba(245, 196, 81, .5); border-radius: 6px;
+  padding: 4px 10px; font-size: 11px; cursor: pointer;
+}
+#modal-review .modal-card { max-width: 760px; text-align: left; }
+#rv-nav { display: flex; align-items: center; justify-content: center; gap: 12px; margin: 8px 0 12px; color: #b9c8de; font-size: 12px; }
+#review-body { max-height: 62vh; overflow-y: auto; text-align: left; font-size: 12px; line-height: 1.75; }
+.rv-summary { background: rgba(245, 196, 81, .08); border-left: 3px solid var(--gold); border-radius: 0 8px 8px 0; padding: 8px 12px; }
+.rv-summary b { color: var(--gold); }
+.rv-h3 { color: #ffd76a; font-size: 12.5px; margin: 12px 0 5px; border-bottom: 1px solid rgba(255, 255, 255, .1); padding-bottom: 3px; }
+.rv-street { margin-bottom: 5px; }
+.rv-street > b { color: #9fb3cf; font-size: 11px; margin-right: 6px; }
+.rv-act {
+  display: inline-block; margin: 2px 4px 2px 0; padding: 1px 7px;
+  border-radius: 10px; background: rgba(255, 255, 255, .06);
+  border: 1px solid #3a4a63; color: #c9d6e8; font-size: 10.5px;
+}
+.rv-act.me { border-color: var(--gold); color: var(--gold); }
+.rv-act.fold { color: #8493a8; text-decoration: line-through; }
+.rv-verdict { font-weight: bold; color: #ffe6a8; }
+.rv-advice { color: #c9d6e8; margin: 3px 0 0; }
+.rv-tips { margin: 4px 0 0; padding-left: 20px; color: #d5e2f3; }
+.rv-tips li { margin-bottom: 3px; }
+.rv-tips li::marker { color: var(--gold); }
+.rv-empty { color: #8fa0b8; }
+@media (max-width: 720px) {
+  #review-toast { left: 8px; right: 8px; bottom: auto; top: 96px; width: auto; font-size: 10px; padding: 7px 9px; }
+  .rv-hero { max-height: 40px; }
+  #modal-review .modal-card { padding: 14px 12px; width: 96%; max-height: 90vh; }
+  #review-body { max-height: 60vh; font-size: 11px; }
+  .rv-act { font-size: 9.5px; padding: 1px 5px; }
+}

@@ -15,6 +15,8 @@ const G = {
   stage: '',
   heroName: '大侠',
   hint: true,          // 实时决策教练（默认开）
+  speed: 1.8,          // 节奏倍率：默认「慢」，摊牌后有时间看复盘
+  reviews: [],         // 最近 12 手复盘（无论自己是否参与）
   panel: true,          // 牌桌局势面板开关
   intel: (typeof window === 'undefined' || window.innerWidth > 720), // 手机默认收起情报卡
   running: false,
@@ -212,6 +214,37 @@ function renderProfiles() {
 const $ = (id) => document.getElementById(id);
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 const fmt = (n) => n.toLocaleString('zh-CN');
+
+/* 节奏：所有等待统一走 wait(ms)，按 G.speed 缩放。默认 1.8 倍慢速，
+   让玩家来得及看复盘、位置标注与每家的动作。 */
+const SPEED_PRESETS = [
+  { key: 'slow',   label: '慢', mul: 1.8 },
+  { key: 'normal', label: '常', mul: 1.0 },
+  { key: 'fast',   label: '快', mul: 0.6 },
+];
+let speedIdx = 0;
+function wait(ms) { return sleep(Math.max(0, Math.round(ms * (G.speed || 1)))); }
+function setSpeed(idx) {
+  speedIdx = (idx + SPEED_PRESETS.length) % SPEED_PRESETS.length;
+  G.speed = SPEED_PRESETS[speedIdx].mul;
+  try { localStorage.setItem('poker_speed', String(speedIdx)); } catch (e) {}
+  const b = $('btn-speed');
+  if (b) b.textContent = `🐢 速度:${SPEED_PRESETS[speedIdx].label}`;
+}
+function loadSpeed() {
+  try {
+    const v = localStorage.getItem('poker_speed');
+    if (v !== null) setSpeed(+v | 0);
+    else setSpeed(0);
+  } catch (e) { setSpeed(0); }
+}
+
+/* 8 人桌相对庄家按钮的位置：btn+1=SB, btn+2=BB, ... btn=BTN */
+function seatPos(i) {
+  const off = (i - ((G.dealerBtn + 1) % 8) + 8) % 8;
+  return POS_BY_OFFSET[off];
+}
+
 
 /* 音频调用统一入口：audio.js 未加载 / 不支持时静默降级（Node 烟测也能跑） */
 function sfx(name, ...args) {
@@ -621,6 +654,169 @@ function heroEquityNow() {
 }
 
 
+
+/* ================= 每手复盘 =================
+ * 每手结束都生成，不管 hero 是否弃牌/是否摊牌：
+ * 全场结果 + 按街的行动时间线 + 公共牌结构 + 对你的判断 + 通用打法建议。
+ */
+let reviewPage = 0;
+let reviewToastTimer = null;
+
+function buildReview(results, hadShowdown) {
+  const hero = G.players[0];
+  const acts = G.handActions.slice();
+  const cn = c => RANK_CH[c.r] + SUIT_CH[c.s];
+  const boardTxt = G.board.length ? G.board.map(cn).join(' ') : '（未发公共牌）';
+  const heroHole = hero.hole.length >= 2 ? hero.hole.map(cn).join(' ') : '';
+  const winners = [];
+  results.forEach(r => {
+    const cat = r.score >= 0 ? handName(r.score) : '全场弃牌';
+    (r.winners || []).forEach(w => {
+      // 同一人可能同时拿下主池与边池，合并成一条，避免复盘里出现重复名字
+      const hit = winners.find(x => x.name === w.name);
+      if (hit) hit.pot += r.pot || 0;
+      else winners.push({ name: w.name, cat, pot: r.pot || 0 });
+    });
+  });
+  const potTotal = results.reduce((sum, r) => sum + (r.pot || 0), 0);
+  const timeline = acts.map(a => ({
+    street: STAGE_CN[a.stage] || a.stage,
+    name: a.name, me: !!a.me,
+    act: ACT_CN[a.act] || a.act, amt: a.amt || 0, extra: a.extra || '',
+  }));
+  const foldCount = acts.filter(a => a.act === 'fold').length;
+  const allinCount = acts.filter(a => (a.extra || '').indexOf('全下') >= 0).length;
+  const showdownCount = hadShowdown ? G.players.filter(p => !p.folded).length : 1;
+  const opener = G.openRaiser || '', openerAmt = G.openAmt || 0;
+  const heroActs = acts.filter(a => a.me);
+  const heroAgg = heroActs.filter(a => a.act === 'raise' || a.act === 'bet').length;
+  const heroCalls = heroActs.filter(a => a.act === 'call').length;
+
+  /* 公共牌结构 → 本手适用的打法要点 */
+  const structure = [];
+  if (G.board.length >= 3) {
+    const ranks = G.board.map(c => c.r), suits = G.board.map(c => c.s);
+    const paired = ranks.some((r, i) => ranks.indexOf(r) !== i);
+    const maxSuit = Math.max.apply(null, ['s', 'h', 'd', 'c'].map(s => suits.filter(x => x === s).length));
+    const uniq = [...new Set(ranks)].sort((a, b) => a - b);
+    const connected = uniq.length >= 3 &&
+      (uniq[2] - uniq[0] <= 4 || uniq[uniq.length - 1] - uniq[uniq.length - 3] <= 4);
+    if (paired) structure.push('对子面：两对 / 三条别当坚果，河牌要防葫芦');
+    if (maxSuit >= 3) structure.push(`${maxSuit} 张同花面：非坚果同花别跟大注，听花补牌要打折`);
+    if (connected) structure.push('连张面：顺子听牌很多，顶对别慢打、要收价值');
+    if (!paired && maxSuit < 3 && !connected) structure.push('干燥面：诈唬更容易成功，但跟注也要看对手倾向');
+  }
+
+  let heroCat = '';
+  if (G.board.length >= 3 && hero.hole.length >= 2) {
+    try { heroCat = handName(best7(hero.hole.concat(G.board)).score); } catch (e) {}
+  }
+  const winCat = winners.length ? winners[0].cat : '';
+  const pos = seatPos(0);
+  const rangePct = (RANGE_TABLE[POS_RANGE_KEY[pos]] || RANGE_TABLE.MP).pct;
+  let heroVerdict, heroAdvice;
+  if (hero.folded) {
+    heroVerdict = `你 ${heroHole} 弃牌`;
+    heroAdvice = heroCat
+      ? `按最终公共牌，跟到底你只会是「${heroCat}」${winCat && winCat !== '全场弃牌' ? `，赢家是「${winCat}」` : ''}，`
+        + `这手弃牌省下了后面的筹码；下次在 ${pos}（可玩 ${rangePct}）先用「🎯 范围表」确认这手牌值不值得入池。`
+      : `翻前就弃牌，${opener ? `${opener} 开池 ${openerAmt}，避开别人的强范围是对的` : '没有投入额外筹码'}；`
+        + `下次在 ${pos} 按 ${rangePct} 的范围决定要不要入池。`;
+  } else if (hero.won > 0) {
+    heroVerdict = `你 ${heroHole} 收下 ${fmt(hero.won)}`;
+    heroAdvice = hadShowdown
+      ? `你以「${heroCat}」胜出。${heroAgg ? '本手有主动下注，价值拿到了' : '本手偏被动，成牌时可以更主动要价值，别让听牌免费看牌'}；`
+        + `${pos} 的位置优势要用来控池和选择性诈唬。`
+      : `靠全场弃牌收池。${opener ? '主动施压奏效，但留意对手下次会不会反击' : '对手都没抵抗'}；`
+        + `偷盲时记得挑紧手、选晚位置。`;
+  } else {
+    heroVerdict = `你 ${heroHole} 未收池`;
+    heroAdvice = hadShowdown
+      ? `你的「${heroCat}」不敌「${winCat}」。${heroCalls >= 2 ? '跟了两条街以上，下次遇到连续下注要重新评估对方范围' : '可以在转牌 / 河牌用胜率与赔率决定要不要继续'}；`
+        + `多人底池里一对、两对的价值要打折。`
+      : `本手没拿到底池。${allinCount ? '有人全下，注意边池只按实际投入分配。' : ''}`
+        + `下次在 ${pos} 先用范围收窄入池，再用教练的胜率/赔率决定是否跟到底。`;
+  }
+
+  /* 通用打法建议：看的是整手牌，不只你自己的动作 */
+  const tips = [];
+  if (opener) tips.push(`${opener} 翻前开池 ${openerAmt}：开池代表强范围，跟注要比自己开池时更紧一档`);
+  else tips.push('无人开池的平跟底池：位置好时主动加注隔离，别让 5、6 家便宜看翻牌');
+  if (foldCount >= 4) tips.push(`${foldCount} 家弃牌，牌桌偏紧：可以适度多偷盲，但遇到反抗要信对方的范围`);
+  if (showdownCount >= 4) tips.push(`${showdownCount} 家看到摊牌：多人底池一对价值大幅下降，别用顶对跟两条街`);
+  if (allinCount) tips.push('本手有全下：全下后不再有后续动作，边池按各家投入分配，别只算主池');
+  structure.forEach(n => tips.push(n));
+  if (G.board.length === 5 && acts.some(a => a.stage === 'river' && (a.act === 'raise' || a.act === 'bet')))
+    tips.push('河牌有人主动下注：这一街范围很极化，抓诈唬前先问自己能赢哪些价值牌');
+  if (!hadShowdown) tips.push('全场弃牌收池：赢家可能只是位置 + 施压，注意他是否反复用同一招');
+  if (!tips.length) tips.push('按位置范围入池，翻后用胜率 / 赔率决定继续与否');
+
+  return {
+    handNo: G.handNo, boardTxt, potTotal, winners, hadShowdown, opener, openerAmt,
+    foldCount, allinCount, showdownCount, timeline,
+    heroHole, heroCat, heroWon: hero.won > 0, heroFolded: !!hero.folded,
+    heroVerdict, heroAdvice, tips,
+  };
+}
+
+function hideReviewToast() {
+  const t = $('review-toast');
+  if (t && t.classList.add) t.classList.add('hidden');
+  clearTimeout(reviewToastTimer);
+}
+function showReviewToast(rv) {
+  const t = $('review-toast');
+  if (!t) return;
+  $('rv-toast-no').textContent = rv.handNo;
+  const winTxt = rv.winners.length
+    ? rv.winners.map(w => `${w.name}（${w.cat}）`).join('、') : '无人摊牌';
+  $('rv-toast-body').innerHTML =
+    `<div class="rv-res">🏆 ${winTxt} 收池 ${fmt(rv.potTotal)}</div>`
+    + `<div class="rv-line2">公共牌 ${rv.boardTxt} · ${rv.hadShowdown ? rv.showdownCount + ' 家摊牌' : '全场弃牌'}</div>`
+    + `<div class="rv-hero">👤 ${rv.heroVerdict} —— ${rv.heroAdvice}</div>`
+    + `<div class="rv-tip">💡 ${rv.tips[0]}</div>`;
+  if (t.classList.remove) t.classList.remove('hidden');
+  clearTimeout(reviewToastTimer);
+  reviewToastTimer = setTimeout(hideReviewToast, Math.round(6500 * (G.speed || 1)));
+}
+function renderReviewModal() {
+  const box = $('review-body');
+  if (!box) return;
+  const list = G.reviews;
+  if (!list.length) {
+    box.innerHTML = '<p class="rv-empty">还没有完成的手牌。打完一手后这里会自动出现复盘。</p>';
+    $('rv-page').textContent = '—';
+    return;
+  }
+  reviewPage = Math.max(0, Math.min(reviewPage, list.length - 1));
+  const rv = list[reviewPage];
+  $('rv-page').textContent = `第 ${rv.handNo} 手 · ${reviewPage + 1}/${list.length}`;
+  const groups = {};
+  rv.timeline.forEach(t => { (groups[t.street] = groups[t.street] || []).push(t); });
+  const tlHtml = Object.keys(groups).map(street =>
+    `<div class="rv-street"><b>${street}</b>`
+    + groups[street].map(t => `<span class="rv-act ${t.me ? 'me' : ''} ${t.act === '弃牌' ? 'fold' : ''}">${t.name} ${t.act}${t.amt ? ' ' + fmt(t.amt) : ''}${t.extra}</span>`).join('')
+    + '</div>').join('') || '<p class="rv-empty">本手没有记录到动作</p>';
+  box.innerHTML =
+    `<div class="rv-summary">`
+    + `<div><b>结果</b>：${rv.winners.map(w => `${w.name} 以「${w.cat}」赢 ${fmt(w.pot)}`).join(' / ') || '—'}`
+    + `　<b>底池</b> ${fmt(rv.potTotal)}　<b>${rv.hadShowdown ? rv.showdownCount + ' 家摊牌' : '全场弃牌'}</b></div>`
+    + `<div><b>公共牌</b>：${rv.boardTxt}</div>`
+    + `<div><b>本手脉络</b>：${rv.opener ? `${rv.opener} 翻前开池 ${fmt(rv.openerAmt)} · ` : '翻前无人开池 · '}`
+    + `${rv.foldCount} 家弃牌${rv.allinCount ? ' · 有全下' : ''}</div>`
+    + `</div>`
+    + `<div class="rv-h3">📜 行动时间线（全场）</div>${tlHtml}`
+    + `<div class="rv-h3">👤 对你的判断（${rv.heroHole}）</div>`
+    + `<div class="rv-verdict">${rv.heroVerdict}</div><p class="rv-advice">${rv.heroAdvice}</p>`
+    + `<div class="rv-h3">💡 本手打法建议</div><ul class="rv-tips">${rv.tips.map(t => `<li>${t}</li>`).join('')}</ul>`;
+}
+function openReview() {
+  reviewPage = 0;
+  renderReviewModal();
+  const m = $('modal-review');
+  if (m && m.classList.remove) m.classList.remove('hidden');
+}
+
 /* ================= 起手牌范围 / 位置 / 策略引擎 =================
  * 旧版把「8 人桌绝对摊牌胜率」直接和「单街底池赔率」比较，
  * 而 8 人桌 AA 也只有约 39%、中等牌 10~15%，导致除超强牌外一律建议弃牌。
@@ -647,11 +843,7 @@ function scoreFromCode(code) {
 
 /* 8 人桌相对庄家按钮的位置 */
 const POS_BY_OFFSET = ['SB', 'BB', 'UTG', 'UTG+1', 'MP', 'MP+1', 'CO', 'BTN'];
-function heroPos() {
-  const btn = G.dealerBtn | 0;
-  const off = (0 - ((btn + 1) % 8) + 8) % 8;
-  return POS_BY_OFFSET[off];
-}
+function heroPos() { return seatPos(0); }
 const POS_RANGE_KEY = {
   SB: 'SB', BB: 'BB', UTG: 'UTG', 'UTG+1': 'UTG',
   MP: 'MP', 'MP+1': 'CO', CO: 'CO', BTN: 'BTN',
@@ -1006,11 +1198,11 @@ function renderIntel() {
     : (G.roundOpener ? `翻前无人开池<br>本轮先手 ${G.roundOpener}`
       : (G.handActions.length ? '本轮无人下注<br>全部过牌 / 平跟' : '等待开局'));
   $('intel-open').innerHTML = openTxt;
-  $('intel-list').innerHTML = G.players.map(p => {
+  $('intel-list').innerHTML = G.players.map((p, i) => {
     const inf = inferPlayer(p);
     const openTag = (p.name === G.openRaiser) ? '<span class="ir-open-tag">OPEN</span>' : '';
     return `<div class="intel-row">
-      <div class="ir-top"><b>${p.emo} ${p.name}</b><span class="ir-tier ${inf.cls}">${inf.tier}</span>${openTag}</div>
+      <div class="ir-top"><span class="pos-badge ${seatPos(i) === 'BTN' ? 'btn-pos' : ''}">${seatPos(i)}</span><b>${p.emo} ${p.name}</b><span class="ir-tier ${inf.cls}">${inf.tier}</span>${openTag}</div>
       <div class="ir-range">${inf.range}</div>
       <div class="ir-line">${inf.line}</div>
     </div>`;
@@ -1072,7 +1264,7 @@ function renderSeats() {
       <div class="plate ${toAct ? 'active' : ''} ${p.won > 0 ? 'winner' : ''} ${p.thinking ? 'thinking' : ''} ${p.won > 0 ? 'winner-flash' : ''}" title="${p.name} 本手动作：${fullLine}｜推测：${inf.range}">
         ${G.dealerBtn === i ? '<div class="dealer-btn-chip">庄</div>' : ''}
         ${p.name === G.openRaiser ? '<div class="open-badge">OPEN</div>' : ''}
-        <div class="pname"><img class="seat-face" src="models/players/face${i}.png" alt="">${p.emo} ${p.name} ${badges.join('')}${!p.isHero && p.style && p.style.indexOf('特邀') === 0 ? '<span class="guest-badge">特邀</span>' : ''}</div>
+        <div class="pname"><img class="seat-face" src="models/players/face${i}.png" alt=""><span class="pos-badge ${seatPos(i) === 'BTN' ? 'btn-pos' : ''}">${seatPos(i)}</span>${p.emo} ${p.name} ${badges.join('')}${!p.isHero && p.style && p.style.indexOf('特邀') === 0 ? '<span class="guest-badge">特邀</span>' : ''}</div>
         <div class="pchips">🪙 ${fmt(p.chips)}</div>
         ${p.thinking ? '<div class="think-tag">🤔 思考中<span class="think-dots"></span></div>' : `<div class="p-actions">${inf.line}</div>`}
         <div class="p-read ${inf.cls}">${inf.tier} · ${inf.range}</div>
@@ -1151,6 +1343,7 @@ function setupHand() {
   sfx('event', 'deal');
   if (G.handNo % 2 === 1) dealerAct('deal', true);   // 荷官同步做发牌动作
   dealerSay(DEALER_LINES.deal);
+  hideReviewToast();
   G.roundActions = []; G.handActions = []; G.resultText = '';
   G.openRaiser = ''; G.openAmt = 0; G.roundOpener = ''; G.roundOpenAmt = 0;
   G.advice = null; eqCache = { key: '', value: 0 };
@@ -1298,7 +1491,7 @@ async function botAct(p) {
   // 思考时长按性格分化：紧手/被动型想得久，松凶型拍得快
   const thinkMs = Math.round(420 + p.pers.tight * 620 + (p.pers.aggr < 0.4 ? 380 : 0)
     + (G.currentBet > G.bb * 3 ? 260 : 0) + Math.random() * 520);
-  await sleep(thinkMs);
+  await wait(thinkMs);
   const toCall = G.currentBet - p.bet;
   const potNow = totalPot();
   const opps = Math.max(1, notFolded().length - 1);
@@ -1449,6 +1642,7 @@ async function showdown() {
     : '';
   updateTop();
   renderBoard(); renderSeats(); renderRoundPanel();
+  return results;
 }
 
 function collectBets() {
@@ -1460,7 +1654,7 @@ async function playHand() {
   setupHand();
   renderBoard(); renderSeats(); updateTop();
   G.justDealt = false;
-  await sleep(900);
+  await wait(900);
 
   // 盲注
   const sbSeat = (G.dealerBtn + 1) % 8;
@@ -1469,7 +1663,7 @@ async function playHand() {
   postBlind(G.players[bbSeat], G.bb, '大盲');
   G.currentBet = G.bb;
   renderSeats(); refreshAdvice();
-  await sleep(600);
+  await wait(600);
 
   // 翻牌前：大盲下一位开始
   await bettingRound((G.dealerBtn + 3) % 8);
@@ -1479,7 +1673,7 @@ async function playHand() {
     renderBoard(); log(`翻牌: ${G.board.map(c => RANK_CH[c.r] + SUIT_CH[c.s]).join(' ')}`);
     sfx('event', 'flop'); dealerSay(DEALER_LINES.flop);
     refreshAdvice();
-    await sleep(800);
+    await wait(800);
     await bettingRound((G.dealerBtn + 1) % 8);
   }
   if (notFolded().length > 1) {
@@ -1488,7 +1682,7 @@ async function playHand() {
     renderBoard(); log(`转牌: ${RANK_CH[G.board[3].r] + SUIT_CH[G.board[3].s]}`);
     sfx('event', 'turn'); dealerSay(DEALER_LINES.turn);
     refreshAdvice();
-    await sleep(800);
+    await wait(800);
     await bettingRound((G.dealerBtn + 1) % 8);
   }
   if (notFolded().length > 1) {
@@ -1497,11 +1691,12 @@ async function playHand() {
     renderBoard(); log(`河牌: ${RANK_CH[G.board[4].r] + SUIT_CH[G.board[4].s]}`);
     sfx('event', 'river'); dealerSay(DEALER_LINES.river);
     refreshAdvice();
-    await sleep(800);
+    await wait(800);
     await bettingRound((G.dealerBtn + 1) % 8);
   }
 
   // 没到河牌就只剩一人 → 直接赢
+  let reviewResults = [], hadShowdown = false;
   if (notFolded().length === 1 && G.stage !== 'showdown') {
     G.stage = 'showdown';
     const w = notFolded()[0];
@@ -1511,9 +1706,18 @@ async function playHand() {
     sfx('event', w.isHero ? 'win' : 'lose');
     G.resultText = `${w.name} 收下底池 ${fmt(w.won)}（全场弃牌）`;
     updateTop(); renderSeats(); renderRoundPanel();
+    reviewResults = [{ winners: [w], pot: w.won, score: -1 }];
   } else {
-    await showdown();
+    reviewResults = await showdown();
+    hadShowdown = notFolded().length > 1;
   }
+
+  // 每手都复盘：不管自己是否弃牌、是否摊牌
+  const rv = buildReview(reviewResults, hadShowdown);
+  G.reviews.unshift(rv);
+  if (G.reviews.length > 12) G.reviews.pop();
+  showReviewToast(rv);
+  log(`📖 复盘：${rv.winners.length ? rv.winners[0].name : '—'} 收池 ${fmt(rv.potTotal)}｜${rv.heroVerdict}`, 'hl');
 
   STATS.hands++;
   updateTop();
@@ -1522,7 +1726,7 @@ async function playHand() {
   log(`—— 第 ${G.handNo} 手结束。你的筹码: ${fmt(hero.chips)} ——`, 'hl');
   archiveHands();      // 归档 8 家行为到最近 20 手并写后端
   collectAllCards();   // 荷官把桌面所有牌收走
-  await sleep(2200);
+  await wait(3200);
   G.players.forEach(p => { p.won = 0; p.revealed = false; p.cardsFolded = false; });
 }
 
@@ -1664,6 +1868,19 @@ function bindEvents() {
     const lines = ['哎哟，点我干嘛呀～', '想让我再发一手吗？', '别急嘛，慢慢玩～', '看我看我，牌可在我手里哦～'];
     sfx('dealerSay', lines[Math.floor(Math.random() * lines.length)]);
   };
+  const br = $('btn-review');
+  if (br) br.onclick = openReview;
+  const bsp = $('btn-speed');
+  if (bsp) bsp.onclick = () => { setSpeed(speedIdx + 1); log(`节奏切换为「${SPEED_PRESETS[speedIdx].label}」`); };
+  const rc = $('review-close');
+  if (rc) rc.onclick = () => $('modal-review').classList.add('hidden');
+  const rp = $('rv-prev'), rn = $('rv-next');
+  if (rp) rp.onclick = () => { reviewPage++; renderReviewModal(); };
+  if (rn) rn.onclick = () => { reviewPage--; renderReviewModal(); };
+  const rtc = $('rv-toast-close');
+  if (rtc) rtc.onclick = hideReviewToast;
+  const rtm = $('rv-toast-more');
+  if (rtm) rtm.onclick = () => { hideReviewToast(); openReview(); };
   const bs = $('btn-strategy');
   if (bs) bs.onclick = openStrategy;
   const sc = $('strat-close');
@@ -1771,6 +1988,7 @@ async function startGame() {
 
 /* ================= 启动 ================= */
 window.addEventListener('DOMContentLoaded', () => {
+  loadSpeed();
   bindEvents();
   renderBoard();
   // 空桌预览
@@ -1783,16 +2001,29 @@ window.addEventListener('DOMContentLoaded', () => {
   renderRoundPanel();
   if (typeof location !== 'undefined') {
     const params = new URLSearchParams(location.search);
+    const spKey = params.get('speed');
+    if (spKey) {
+      const k = SPEED_PRESETS.findIndex(x => x.key === spKey || x.label === spKey);
+      if (k >= 0) setSpeed(k);
+    }
     if (params.get('tutorial') === '1') {
       tutPage = 0; renderTut(); $('modal-tutorial').classList.remove('hidden');
     }
     if (params.get('range') === '1') {
       setTimeout(openStrategy, 900);
     }
+    if (params.get('review') === '1') {
+      if (params.get('demo') === '1') {
+        // 演示：等真实第一手复盘生成后自动打开完整复盘弹窗（方便直接查看效果）
+        const waitRv = setInterval(() => {
+          if (G.reviews && G.reviews.length) { clearInterval(waitRv); openReview(); }
+        }, 250);
+      } else setTimeout(openReview, 900);
+    }
     if (params.get('demo') === '1') {
       $('input-name').value = '演示侠';
       startGame();
-      setInterval(() => {
+      const autoTick = () => {
         if (typeof heroResolve !== 'undefined' && heroResolve) {
           heroDo($('act-check').disabled ? 'call' : 'check');
         }
@@ -1802,7 +2033,9 @@ window.addEventListener('DOMContentLoaded', () => {
           $('modal-rebuy').classList.add('hidden');
           if (r) r(true);
         }
-      }, 300);
+        setTimeout(autoTick, Math.round(300 * (G.speed || 1)));
+      };
+      setTimeout(autoTick, 300);
     }
     // 全下喊话直达演示：?allin=1（方便直接看/听 "All in!" 效果）
     if (params.get('allin') === '1') {
