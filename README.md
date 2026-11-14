@@ -7,9 +7,7 @@
 ## 在线玩
 
 - **GitHub Pages**：<https://yuhuali1989.github.io/poker/>
-- 仓库自带 `.github/workflows/pages.yml`：每次 push `main` 会自动把站点同步到 `gh-pages` 分支。
-  首次只需在仓库 **Settings → Pages** 把 Source 设为 `Deploy from a branch` → `gh-pages` / `(root)` 并保存，
-  之后所有更新自动发布。（GitHub 不允许 Actions 的 `GITHUB_TOKEN` 代开 Pages，所以这一步只能人工点一次。）
+- 仓库使用 GitHub Pages 官方工作流 `.github/workflows/static.yml`：每次 push `main` 自动构建并部署，无需手动同步分支。
 
 ## 本地运行
 
@@ -22,7 +20,6 @@ python -m http.server 8080
 
 或 `npx serve .`。也可以用原来的 Node 版 `server.js`（积分存服务端 JSON），静态版则用 `localStorage` 复刻了同一套 `/api/*` 接口。
 
-
 ## 手机上使用
 
 窄屏（≤ 720px）会自动切换为移动布局，不需要额外设置：
@@ -31,8 +28,8 @@ python -m http.server 8080
 - 公共牌放大居中，底池与阶段清晰；本轮局势精简为「胜率 · 赔率 · 听牌 · 建议」
 - **我的手牌 + 操作按钮吸底**，弃牌 / 过牌 / 跟注三键等宽，加注滑块与快捷下注单行排布
 - 荷官收成一条迷你互动栏（点她本人仍可互动，动作与打赏可横向滑动）；情报卡默认收起，顶栏可开
-- 手机默认用 **2D 练习桌**（牌更清楚、更省电），点顶栏「🎲 3D 桌」可切到 3D 桌； 强制开启、 强制关闭
-- 支持刘海屏安全区（），按钮均按触控尺寸设计
+- 手机默认用 **2D 练习桌**（牌更清楚、更省电），点顶栏「🎲 3D 桌」可切到 3D 桌；`?3d=1` 强制开启、`?3d=0` 强制关闭
+- 支持刘海屏安全区（`viewport-fit=cover`），按钮均按触控尺寸设计
 
 ## 功能一览
 
@@ -59,7 +56,7 @@ python -m http.server 8080
 | `?profiles=1` | 打开牌手档案弹窗 |
 | `?face=1` | 3D 荷官特写镜头 |
 | `?look=yara` / `?mode=video` / `?zoom=1` | 指定形象 / 媒体模式 / 镜头 |
-| `?3d=0` | 切回 2D 经典桌 |
+| `?3d=1` / `?3d=0` | 强制开启 / 关闭 3D 桌（手机默认 2D） |
 
 > 首次进入请点击一次页面（浏览器自动播放策略），音乐与语音才会响起。顶栏可分别关闭音乐 / 音效 / 3D / 局势面板 / 情报卡。
 
@@ -67,7 +64,7 @@ python -m http.server 8080
 
 ```
 index.html          页面结构
-style.css           样式与 2D/3D 两套布局
+style.css           样式（含桌面 3D 与手机响应式两套布局）
 core.js             牌堆、洗牌、牌力评估、蒙特卡洛胜率
 game.js             牌局流程、AI 决策、教学、交互反馈
 audio.js            Web Audio 音乐 / 音效 / SpeechSynthesis 语音
@@ -86,7 +83,8 @@ videos/             写实荷官循环短片
 - **importmap 使用相对路径**，因此可部署在 GitHub Pages 的 `/仓库名/` 子路径下，也可放在任意子目录。
 - `.nojekyll` 避免 GitHub Pages 用 Jekyll 处理带下划线的文件。
 - 3D 模型加载失败或超时会自动回退到程序化 3D 备用角色，不会白屏。
-- 不支持 WebGL 的环境会自动切回 2D 桌。
+- 不支持 WebGL 的环境会自动切回 2D 桌；窄屏默认使用 2D 练习桌。
+- 3D 场景按 canvas 实际显示尺寸计算相机宽高比，手机端不会把画面压成一小块。
 
 ## 说明
 
