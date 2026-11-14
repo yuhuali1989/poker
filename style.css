@@ -1077,3 +1077,74 @@ body.t3d #btn-3d-face { font-size: 10px; padding: 4px 7px; width: 100%; }
   body.t3d #table .seat .plate { transform: none; }
   body.t3d #t3d-cam-bar { display: none; }
 }
+
+
+/* ================= 实时决策教练 ================= */
+#coach-tip {
+  margin-top: 5px; padding: 5px 10px; border-radius: 8px;
+  background: linear-gradient(90deg, rgba(245, 196, 81, .11), rgba(18, 28, 46, .62));
+  border: 1px solid rgba(245, 196, 81, .38);
+  display: flex; flex-wrap: wrap; align-items: center; gap: 3px 10px;
+  font-size: 11px; line-height: 1.5; color: #d9e3f2;
+}
+#coach-tip.coach-off { display: none; }
+.coach-main { font-size: 12px; color: #f3e3b8; }
+.coach-main b { color: var(--gold); font-size: 13px; }
+.coach-hand { color: #9fb3cf; font-size: 10px; margin-left: 7px; }
+.coach-why { flex: 1 1 100%; font-size: 10px; color: #a7b6cc; line-height: 1.45; }
+.coach-why b.ok { color: #6fe08a; }
+.coach-why b.bad { color: #ff8f8f; }
+#coach-apply, #coach-range {
+  background: rgba(245, 196, 81, .16); color: var(--gold);
+  border: 1px solid rgba(245, 196, 81, .55); border-radius: 6px;
+  padding: 3px 9px; font-size: 10px; cursor: pointer; min-height: 27px;
+}
+#coach-apply:hover, #coach-range:hover { background: rgba(245, 196, 81, .3); }
+.act { position: relative; }
+.act.recommended {
+  outline: 2px solid var(--gold); outline-offset: 2px;
+  box-shadow: 0 0 16px rgba(245, 196, 81, .65);
+  animation: coachPulse 1.8s ease-in-out infinite;
+}
+.act.recommended::after {
+  content: '✓ 推荐'; position: absolute; top: -16px; right: -2px;
+  background: var(--gold); color: #3a2600; font-size: 9px;
+  padding: 1px 5px; border-radius: 6px; font-weight: bold; white-space: nowrap;
+}
+@keyframes coachPulse { 0%, 100% { filter: brightness(1); } 50% { filter: brightness(1.18); } }
+@media (max-width: 720px) {
+  #coach-tip { margin-top: 3px; padding: 4px 7px; gap: 2px 6px; font-size: 10px; }
+  .coach-main { font-size: 11px; }
+  .coach-main b { font-size: 12px; }
+  .coach-hand { display: none; }
+  .coach-why { font-size: 9px; max-height: 26px; overflow: hidden; }
+  #coach-apply, #coach-range { min-height: 28px; padding: 4px 7px; font-size: 9.5px; }
+  .act.recommended::after { font-size: 8px; top: -13px; }
+}
+
+/* 教练推荐：禁用态也要看得见（预告下一步该点哪个） */
+.act.recommended { z-index: 2; }
+.act.recommended:disabled { opacity: .62; }
+@media (max-width: 720px) {
+  .coach-hand { display: inline; font-size: 9px; margin-left: 4px; }
+}
+
+/* 教练卡：手机端压到两行，避免挤掉局势面板；推荐角标放进按钮内 */
+#actions { position: relative; z-index: 3; }
+@media (max-width: 720px) {
+  #coach-tip { gap: 2px 5px; padding: 3px 6px; }
+  .coach-main {
+    flex: 1 1 auto; min-width: 0;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .coach-why {
+    flex: 1 1 100%; max-height: 15px; line-height: 15px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  #coach-apply, #coach-range {
+    flex: 0 0 auto; padding: 3px 5px; font-size: 9px; min-height: 24px;
+  }
+  .act.recommended::after {
+    top: 1px; right: 2px; font-size: 7px; padding: 0 3px; border-radius: 4px;
+  }
+}

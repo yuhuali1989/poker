@@ -14,7 +14,7 @@ const G = {
   minRaise: 20,
   stage: '',
   heroName: '大侠',
-  hint: false,
+  hint: true,          // 实时决策教练（默认开）
   panel: true,          // 牌桌局势面板开关
   intel: (typeof window === 'undefined' || window.innerWidth > 720), // 手机默认收起情报卡
   running: false,
@@ -509,6 +509,72 @@ function activePlayers() { return G.players.filter(p => !p.folded && !p.allin &&
 function notFolded() { return G.players.filter(p => !p.folded); }
 function totalPot() { return G.pot + G.players.reduce((s, p) => s + p.bet, 0); }
 
+
+/* ================= 实时决策教练（顶栏「💡 教练」）=================
+ * 旧版只在轮到你时往 #hint-tip 写一行「胜率 X% · 建议 Y」，和局势面板完全重复，
+ * 开关打开几乎看不出变化。现在改成：常驻教练卡 + 推荐按钮高亮 + 一键采用建议下注额，
+ * 并且任何状态变化（发牌 / 别人下注 / 翻牌）都会刷新。
+ */
+function coachTarget(action) {
+  if (!action) return '';
+  if (action.indexOf('弃牌') >= 0) return 'act-fold';
+  if (/加注|下注|3bet/.test(action)) return 'act-raise';
+  if (action.indexOf('跟注') >= 0) return 'act-call';
+  if (action.indexOf('过牌') >= 0) return 'act-check';
+  return '';
+}
+function clearCoachHighlights() {
+  ['act-fold', 'act-check', 'act-call', 'act-raise'].forEach(id => {
+    const b = $(id);
+    if (b && b.classList && b.classList.remove) b.classList.remove('recommended');
+  });
+}
+function applyCoachBet() {
+  const a = G.advice, s = $('raise-slider');
+  if (!a || !a.bet || !s) return;
+  const lo = +(s.min || 0), hi = +(s.max || 0);
+  s.value = String(Math.max(lo, Math.min(hi || a.bet, a.bet)));
+  updateRaiseVal();
+  const b = $('coach-apply');
+  if (b) b.textContent = '✓ 已填入';
+}
+function renderCoach() {
+  const box = $('coach-tip');
+  if (!box) return;
+  clearCoachHighlights();
+  const a = G.advice;
+  if (!G.hint || !a || G.stage === 'showdown') {
+    if (box.classList.add) box.classList.add('coach-off');
+    box.innerHTML = '';
+    return;
+  }
+  if (box.classList.remove) box.classList.remove('coach-off');
+  const eqTxt = (a.eq * 100).toFixed(0);
+  const aggressive = /加注|下注|3bet/.test(a.action);
+  // 主动下注时谈「跟注所需」会自相矛盾（8 人桌胜率天然低），改讲牌力档位与位置范围
+  const cmp = aggressive
+    ? `${a.range.pct} 范围 · 主动建池拿主动权`
+    : (a.toCall > 0
+      ? `胜率 <b class="${a.eq >= a.potOdds ? 'ok' : 'bad'}">${eqTxt}%</b> ${a.eq >= a.potOdds ? '≥' : '&lt;'} 跟注所需 ${(a.potOdds * 100).toFixed(0)}%`
+      : `本轮无需跟注 · 估算胜率 ${eqTxt}%`);
+  const whyShort = a.why.length > 62 ? a.why.slice(0, 62) + '…' : a.why;
+  box.innerHTML =
+    `<div class="coach-main">🎓 <b>${a.action}</b>${a.bet > 0 ? ` · 建议${a.betLabel} <b>${fmt(a.bet)}</b>` : ''}`
+    + `<span class="coach-hand">${a.code} · ${a.grade.key} 级 · ${a.pos}</span></div>`
+    + `<div class="coach-why">${cmp} ｜ ${whyShort}</div>`
+    + (a.bet > 0 ? `<button id="coach-apply" type="button">👉 用建议额</button>` : '')
+    + `<button id="coach-range" type="button">📋 范围表</button>`;
+  const ap = $('coach-apply');
+  if (ap) ap.onclick = applyCoachBet;
+  const rg = $('coach-range');
+  if (rg) rg.onclick = () => openStrategy();
+  const t = coachTarget(a.action);
+  if (t) {
+    const b = $(t);
+    if (b && b.classList && b.classList.add) b.classList.add('recommended');
+  }
+}
+
 /* ================= 局势读数 / 胜率 / 建议 ================= */
 /* 听牌：同花听牌、顺子听牌的补牌张数与成牌概率 */
 function computeDraws(hole, board) {
@@ -626,7 +692,7 @@ function gradeHand(score) {
 
 function refreshAdvice() {
   const hero = G.players[0];
-  if (!hero || hero.hole.length < 2) { G.advice = null; renderRoundPanel(); renderMyHand(); return null; }
+  if (!hero || hero.hole.length < 2) { G.advice = null; renderRoundPanel(); renderMyHand(); renderCoach(); return null; }
   const eq = heroEquityNow();
   const toCall = Math.max(0, G.currentBet - hero.bet);
   const potNow = totalPot();
@@ -748,6 +814,7 @@ function refreshAdvice() {
   };
   renderRoundPanel();
   renderMyHand();
+  renderCoach();
   return G.advice;
 }
 
@@ -1161,9 +1228,13 @@ function heroAct(p) {
     : `可免费过牌 · 底池 ${fmt(totalPot())} · 你的筹码 ${fmt(p.chips)}`;
   $('hero-stage-tip').textContent = tip;
   const adv = refreshAdvice();
-  if (G.hint && adv) {
-    $('hint-tip').textContent = `💡 胜率 ${(adv.eq * 100).toFixed(1)}% · 建议 ${adv.action}${adv.bet > 0 ? ' ' + fmt(adv.bet) : ''}`;
-  } else $('hint-tip').textContent = '';
+  $('hint-tip').textContent = '';
+  // 教练开启 + 建议主动下注时，直接把滑条预填到建议额（用户仍可手动改）
+  if (G.hint && adv && adv.bet > 0 && /加注|下注|3bet/.test(adv.action) && !slider.disabled) {
+    const lo = +slider.min, hi = +slider.max;
+    slider.value = String(Math.max(lo, Math.min(hi, adv.bet)));
+    updateRaiseVal();
+  }
 
   return new Promise(resolve => { heroResolve = resolve; });
 }
@@ -1630,9 +1701,11 @@ function bindEvents() {
   $('prof-close').onclick = () => $('modal-profiles').classList.add('hidden');
   $('btn-rank').onclick = async () => { await apiRank(); $('modal-rank').classList.remove('hidden'); };
   $('rank-close').onclick = () => $('modal-rank').classList.add('hidden');
+  $('btn-hint').textContent = `💡 教练:${G.hint ? '开' : '关'}`;
   $('btn-hint').onclick = () => {
     G.hint = !G.hint;
-    $('btn-hint').textContent = `💡 提示:${G.hint ? '开' : '关'}`;
+    $('btn-hint').textContent = `💡 教练:${G.hint ? '开' : '关'}`;
+    renderCoach();
   };
   $('btn-panel').onclick = () => {
     G.panel = !G.panel;
