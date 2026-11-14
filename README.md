@@ -6,7 +6,7 @@
 
 ## 在线玩
 
-- **GitHub Pages**：<https://yuhuali1989.github.io/texas-holdem-practice/>
+- **GitHub Pages**：<https://yuhuali1989.github.io/poker/>
 - 首次 push 到 `main` 后，`.github/workflows/pages.yml` 会自动启用 Pages 并部署，无需手动设置。
 
 ## 本地运行
