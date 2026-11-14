@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>金鳄会 · 德州扑克（纯前端版）</title>
+<title>德州扑克练习桌</title>
 <link rel="stylesheet" href="style.css">
 <script type="importmap">{"imports":{"three":"./vendor/three.module.js"}}</script>
 </head>
@@ -11,7 +11,7 @@
 <div id="app">
   <!-- 顶栏 -->
   <header id="topbar">
-    <div class="brand">🃏 金鳄会 · 德州扑克 <span class="sub">CRYPTO 真随机 · 8人桌</span></div>
+    <div class="brand">🃏 德州扑克练习桌 <span class="sub">CRYPTO 真随机 · 8人桌</span></div>
     <div class="top-info">
       <span id="blind-info">盲注 10/20</span>
       <span id="hand-no">第 0 手</span>
@@ -126,6 +126,12 @@
 
   <!-- 操作区 -->
   <footer id="action-bar">
+    <!-- 我的手牌：放大单独展示，3D 模式下也始终可见 -->
+    <div id="my-hand">
+      <div class="mh-label">🃏 我的手牌<span id="mh-tag">等待发牌</span></div>
+      <div id="mh-cards"></div>
+      <div id="mh-read"></div>
+    </div>
     <div id="hero-info">
       <span id="hero-stage-tip"></span>
       <span id="hint-tip"></span>
@@ -152,7 +158,7 @@
 <!-- 开始弹窗 -->
 <div id="modal-start" class="modal">
   <div class="modal-card">
-    <h2>🃏 欢迎来到金鳄会</h2>
+    <h2>🃏 德州扑克练习桌</h2>
     <p>8 人 3D 名人桌 · 与 Yara / Siaqiu / 布兰妮 / Tanxuan / Dwan 同桌</p>
     <p class="fineprint">桌上名人牌手均为虚构 3D 致敬形象，非本人肖像</p>
     <p class="fineprint">纯前端版 · 积分与牌手档案保存在本机浏览器（localStorage）</p>

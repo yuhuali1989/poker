@@ -421,6 +421,50 @@ function cardEl(c, faceUp) {
   return d;
 }
 
+/* 我的手牌：放大单独展示（3D 模式下座位手牌隐藏，这里始终可见） */
+function renderMyHand() {
+  const box = $('mh-cards'), tag = $('mh-tag'), read = $('mh-read'), panel = $('my-hand');
+  if (!box || !tag || !read || !panel) return;
+  const hero = G.players[0];
+  if (!hero || !hero.hole || hero.hole.length < 2) {
+    box.dataset.key = '';
+    box.innerHTML = '<div class="card back"></div><div class="card back"></div>';
+    tag.textContent = '等待发牌';
+    read.innerHTML = '入座后，你的两张底牌会放大显示在这里，并实时给出牌型与胜率';
+    panel.classList.remove('mh-folded');
+    return;
+  }
+  const key = hero.hole.map(c => c.id || (c.r + c.s)).join('|');
+  if (box.dataset.key !== key) {
+    box.dataset.key = key;
+    box.innerHTML = '';
+    hero.hole.forEach(c => {
+      const el = cardEl(c, true);
+      if (G.justDealt) el.classList.add('dealt');
+      box.appendChild(el);
+    });
+  }
+  // Node vm 烟测里的假 DOM 可能没有 toggle，做一层防御
+  if (typeof panel.classList.toggle === 'function') panel.classList.toggle('mh-folded', !!hero.folded);
+  tag.textContent = hero.hole.map(c => RANK_CH[c.r] + SUIT_CH[c.s]).join(' ') + (hero.folded ? ' · 已弃牌' : '');
+  let grade = '';
+  if (G.board.length < 3) {
+    const s = preflopStrength(hero.hole);
+    grade = s >= .85 ? '超强起手' : s >= .70 ? '强牌' : s >= .50 ? '可玩' : s >= .32 ? '边缘牌' : '弱牌';
+  }
+  let made = '';
+  if (G.board.length >= 3) {
+    try { made = handName(best7(hero.hole.concat(G.board)).score); } catch (e) { made = ''; }
+  }
+  const eq = G.advice && typeof G.advice.eq === 'number' ? G.advice.eq : null;
+  read.innerHTML = [
+    made ? `当前牌型 <b>${made}</b>` : (grade ? `起手评估 <b>${grade}</b>` : ''),
+    eq !== null ? `胜率 <b>${(eq * 100).toFixed(1)}%</b>` : '',
+    G.advice && G.advice.action ? `建议 <b>${G.advice.action}</b>` : '',
+    hero.folded ? '<span style="color:#ff9a9a">本手已放弃</span>' : '',
+  ].filter(Boolean).join(' · ');
+}
+
 /* ================= 初始化 / 存档 ================= */
 async function apiLoad(name) {
   try {
@@ -511,7 +555,7 @@ function heroEquityNow() {
 
 function refreshAdvice() {
   const hero = G.players[0];
-  if (!hero || hero.hole.length < 2) { G.advice = null; renderRoundPanel(); return null; }
+  if (!hero || hero.hole.length < 2) { G.advice = null; renderRoundPanel(); renderMyHand(); return null; }
   const eq = heroEquityNow();
   const toCall = Math.max(0, G.currentBet - hero.bet);
   const potNow = totalPot();
@@ -550,6 +594,7 @@ function refreshAdvice() {
   }
   G.advice = { eq, toCall, potOdds, potNow, draws, alive: notFolded().length, action, why, bet, betLabel };
   renderRoundPanel();
+  renderMyHand();
   return G.advice;
 }
 
@@ -761,6 +806,7 @@ function renderSeats() {
   }
   $('pot-num').textContent = fmt(totalPot());
   t3dSync();
+  renderMyHand();
 }
 
 function renderBoard() {
@@ -770,6 +816,7 @@ function renderBoard() {
   const names = { preflop: '翻牌前', flop: '翻牌圈', turn: '转牌圈', river: '河牌圈', showdown: 'Showdown!' };
   $('stage-label').textContent = names[G.stage] || '';
   t3dSync();
+  renderMyHand();
 }
 
 function updateTop() {
